@@ -1,0 +1,215 @@
+---
+title: "退出データの作成"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  cache = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+# 退出の定義
+
+- 親会社レベルでは、親会社がある国に現地法人を持つ状態（`JPCode` × `iso`）がデータ上で最後に観測された後、最終観測年がパネルの最終年でない場合に退出として扱う。
+- 現地法人レベルでは、現地法人（`AffiliateCode` × `iso`）がデータ上で最後に観測された後、最終観測年がパネルの最終年でない場合に退出として扱う。
+- `censored == 0` の最終観測だけを退出イベントとして1回だけ数える。
+- データは1990年から2022年までの隔年パネルなので、退出年は「最後に観測された年」ではなく、その次の調査年、すなわち最終観測年の2年後と定義する。
+- 1990年に最後に観測された個体は1992年退出、2020年に最後に観測された個体は2022年退出として扱う。
+- 2022年に最後に観測された個体はパネル最終年で右打ち切りであり、退出したことを次の調査年で確認できないため、退出イベントとして扱わず、退出年は欠損と考える。
+- 結果として、1992年から2022年までの退出現地法人数・退出親会社数を格納したデータセットを作成する。
+
+
+# パッケージの読み込み
+
+```{r packages}
+library(rio)
+library(dplyr)
+```
+
+# データの読み込み
+
+## 入力データ
+
+- `../../03_data_output/ShareHolder/shareholder_panel_iso_sector.dta`
+
+## 出力データ
+
+- `../../03_data_output/ShareHolder/shareholder_panel_iso_sector_affiliate_last.dta`
+- `../../03_data_output/ShareHolder/shareholder_panel_iso_sector_parent_last.dta`
+- `../../03_data_output/EntryExit/N_affiliate_exit_country_industry_year.dta`
+- `../../03_data_output/EntryExit/N_affiliate_exit_country_year.dta`
+- `../../03_data_output/EntryExit/N_parent_exit_country_industry_year.dta`
+- `../../03_data_output/EntryExit/N_parent_exit_country_year.dta`
+- `../../03_data_output/EntryExit/N_parent_exit_uk_after_brexit.dta`
+- `../../03_data_output/EntryExit/N_affiliate_exit_uk_after_brexit.dta`
+
+```{r load-data}
+shjp <- rio::import("../../03_data_output/ShareHolder/shareholder_panel_iso_sector.dta")
+
+# JOwnRatio を 0-1 スケールの Ratio に変換
+shjp <- shjp %>%
+  mutate(Ratio = JOwnRatio / 100) %>%
+  select(-JOwnRatio)
+
+panel_last_year <- max(shjp$year, na.rm = TRUE)
+panel_last_year
+```
+
+
+# 最終観測データの作成
+
+## 現地法人レベルの最終観測データ
+
+1つの現地法人に複数の親会社が存在するため、rank==1 の行で現地法人を代表する。
+
+```{r affiliate-last}
+# rank==1 で AffiliateCode × year に集約
+aff <- shjp %>%
+  group_by(AffiliateCode, year) %>%
+  filter(rank == min(rank)) %>%
+  slice(1) %>%
+  ungroup()
+
+# AffiliateCode × iso ごとに最終観測年を特定し、その行だけ残す
+aff_last <- aff %>%
+  group_by(AffiliateCode, iso) %>%
+  filter(year == max(year)) %>%
+  slice(1) %>%
+  ungroup()
+
+# censored: パネル最終年に観測されていれば 1、そうでなければ 0
+aff_last <- aff_last %>%
+  mutate(censored = ifelse(year == panel_last_year, 1, 0))
+
+table(aff_last$censored)
+
+rio::export(aff_last, "../../03_data_output/ShareHolder/shareholder_panel_iso_sector_affiliate_last.dta")
+```
+
+## 親会社レベルの最終観測データ
+
+全 rank を使用し、JPCode × iso × year の存在を確認する。
+
+```{r parent-last}
+# JPCode × iso × year ごとに集約（Ratio は平均、セクターは代表値）
+parent <- shjp %>%
+  group_by(JPCode, iso, year) %>%
+  summarise(
+    Ratio                      = mean(Ratio, na.rm = TRUE),
+    Parent_SectorCode          = first(Parent_SectorCode2009),
+    Parent_SectorClass         = first(Parent_SectorClass),
+    Parent_SectorClassNameAlph = first(Parent_SectorClassNameAlph),
+    countryname                = first(countryname),
+    .groups = "drop"
+  )
+
+# JPCode × iso ごとに最終観測年を特定し、その行だけ残す
+parent_last <- parent %>%
+  group_by(JPCode, iso) %>%
+  filter(year == max(year)) %>%
+  slice(1) %>%
+  ungroup()
+
+# censored: パネル最終年に観測されていれば 1、そうでなければ 0
+parent_last <- parent_last %>%
+  mutate(censored = ifelse(year == panel_last_year, 1, 0))
+
+table(parent_last$censored)
+
+rio::export(parent_last, "../../03_data_output/ShareHolder/shareholder_panel_iso_sector_parent_last.dta")
+```
+
+
+# 退出フローデータの作成
+
+`censored == 0` の最終観測を退出イベントとし、退出年を最終観測年 + 2 と定義する。
+
+```{r create-exit-flow}
+parent_exit_flow <- parent_last %>%
+  filter(censored == 0) %>%
+  mutate(year2 = year + 2) %>%
+  filter(year2 <= panel_last_year)
+
+aff_exit_flow <- aff_last %>%
+  filter(censored == 0) %>%
+  mutate(year2 = year + 2) %>%
+  filter(year2 <= panel_last_year)
+```
+
+
+# 退出件数データ
+
+## 親会社レベル（産業×国×退出年）
+
+```{r parent-exit-industry-data}
+N_firm_exit_industry <- parent_exit_flow %>%
+  transmute(iso, Parent_SectorCode, year = year2, Ratio) %>%
+  group_by(iso, Parent_SectorCode, year) %>%
+  summarise(N_exit = n(),
+            WN     = sum(Ratio, na.rm = TRUE),
+            .groups = "drop") %>%
+  arrange(iso, Parent_SectorCode, year)
+
+rio::export(N_firm_exit_industry, "../../03_data_output/EntryExit/N_parent_exit_country_industry_year.dta")
+```
+
+## 親会社レベル（国×退出年）
+
+```{r parent-exit-data}
+N_firm_exit <- N_firm_exit_industry %>%
+  group_by(iso, year) %>%
+  summarise(N_exit = sum(N_exit, na.rm = TRUE),
+            WN     = sum(WN, na.rm = TRUE),
+            .groups = "drop") %>%
+  arrange(iso, year)
+
+rio::export(N_firm_exit, "../../03_data_output/EntryExit/N_parent_exit_country_year.dta")
+```
+
+## 現地法人レベル（産業×国×退出年）
+
+```{r affiliate-exit-industry-data}
+N_Aff_exit_industry <- aff_exit_flow %>%
+  transmute(iso, FASector = FA_SectorCode2009, year = year2, Ratio) %>%
+  group_by(iso, FASector, year) %>%
+  summarise(N_exit_industry = n(),
+            WN              = sum(Ratio, na.rm = TRUE),
+            .groups = "drop") %>%
+  arrange(iso, FASector, year)
+
+rio::export(N_Aff_exit_industry, "../../03_data_output/EntryExit/N_affiliate_exit_country_industry_year.dta")
+```
+
+## 現地法人レベル（国×退出年）
+
+```{r affiliate-exit-data}
+N_Aff_exit <- N_Aff_exit_industry %>%
+  group_by(iso, year) %>%
+  summarise(N_exit = sum(N_exit_industry, na.rm = TRUE),
+            WN     = sum(WN, na.rm = TRUE),
+            .groups = "drop") %>%
+  arrange(iso, year)
+
+rio::export(N_Aff_exit, "../../03_data_output/EntryExit/N_affiliate_exit_country_year.dta")
+```
+
+
+# 英国退出サブサンプル
+
+```{r exit-subsample}
+exit_firm2016_UK <- parent_exit_flow %>% filter(iso == "GBR" & year2 >= 2016)
+exit_aff2016_UK  <- aff_exit_flow    %>% filter(iso == "GBR" & year2 >= 2016)
+
+rio::export(exit_firm2016_UK, "../../03_data_output/EntryExit/N_parent_exit_uk_after_brexit.dta")
+rio::export(exit_aff2016_UK,  "../../03_data_output/EntryExit/N_affiliate_exit_uk_after_brexit.dta")
+```

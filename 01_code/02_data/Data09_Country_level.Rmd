@@ -1,0 +1,115 @@
+---
+title: "国年レベル集計データの作成"
+author: "Ayumu Tanaka"
+date: "2025-06-06"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+# パッケージの読み込み
+
+```{r load-package}
+library(ggplot2)
+library(dplyr)
+```
+
+# データの読み込み
+
+```{r load-data-package}
+library(rio)
+FA6 = import("../../03_data_output/Affiliate/affiliate_panel_survival_ready.dta")
+
+# 2010年から2020年に限定
+FA6 <- subset(FA6, year >= 2010 & year <= 2020)
+
+names(FA6)[names(FA6)=="iso"] = "country"
+
+
+```
+
+
+
+
+# 国年レベルへの集計
+
+```{r collapse-data-tidyverse}
+N_Aff <- FA6 %>% 
+  group_by(year, country) %>% 
+  summarise(N = n(), 
+            EU = first(EU_all),
+            meanratio = mean(RatioAll, na.rm = TRUE),
+            WN = sum(RatioAll, na.rm = TRUE)
+            )
+```
+
+
+
+# EU内集計データの作成
+
+```{r collapse-data-GBR}
+# EU加盟国サンプルに限定
+  aff_EU <- subset(FA6, FA6$EU_all == 1)
+# 2010年以降に限定
+  aff_EU <- subset(aff_EU, aff_EU$year >= 2010)
+
+```
+
+# 高所得EUサンプルの作成
+
+- High-income EU countries are Luxembourg, Ireland, Denmark, Netherlands, Sweden, Austria, Germany, Finland, Belgium, France, United Kingdom, and Italy. The GDP per capita of these countries are as follows:
+- Luxembourg: $115,531 LUX
+- Ireland: $84,339 IRL
+- Denmark: $63,434 DNK
+- Netherlands: $62,515 NLD
+- Sweden: $59,738 SWE
+- Austria: $57,256 AUT
+- Germany: $55,682 DEU
+- Finland: $55,345 FIN
+- Belgium: $54,319 BEL 
+- France: $46,133 FRA
+- United Kingdom: $45,470 GBR
+- Italy: $40,594 ITA
+
+```{r high-income-EU}
+
+
+# 高所得EUダミーを作成
+aff_EU$highEU <- ifelse(aff_EU$country %in% c("AUT", "BEL", "DNK", "FIN", "FRA", "DEU", "IRL", "ITA", "LUX", "NLD", "SWE", "GBR"), 1, 0)
+
+# 高所得EUサンプルを作成
+aff_EU_high <- subset(aff_EU, aff_EU$highEU == 1)
+
+
+# 英国ダミー×年で集計
+N_Aff_EU_high <- aff_EU_high %>% 
+  group_by(year, GBR) %>% 
+  summarise(N = n(), 
+            GBR = first(GBR),
+            ncountry = n_distinct(country),
+            WN = sum(RatioAll, na.rm = TRUE)
+            )
+
+```
+
+
+
+
+
+# データの保存
+
+```{r save-data}
+  rio::export(N_Aff, "../../03_data_output/Affiliate/affiliate_count_country_year.dta")
+  rio::export(N_Aff_EU_high, "../../03_data_output/Affiliate/affiliate_count_high_income_eu_country_year.dta")
+  rio::export(aff_EU_high, "../../03_data_output/Affiliate/affiliate_ownership_high_income_eu_country_year.dta")
+```

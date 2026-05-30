@@ -1,0 +1,894 @@
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/ayumu/Documents/GitHub/2024Brexit/01_code/03_r_temp/Tab4_EntryExitCount_PooledPoissonQMLE.log
+  log type:  text
+ opened on:  29 May 2026, 15:52:36
+
+. 
+. * 1. Load data
+. use "../../03_data_output/EntryExit/N_affiliate_entry_exit.dta", clear
+
+. 
+. * Basic cleaning
+. drop if iso == "" | missing(iso)
+(0 observations deleted)
+
+. drop if missing(FASector) | FASector == 0
+(120 observations deleted)
+
+. keep if inrange(year, 2010, 2020)
+(17,770 observations deleted)
+
+. 
+. * Ensure integer years (biennial)
+. replace year = round(year)
+(0 real changes made)
+
+. 
+. * 2. Balanced panel: fill missing industry-country-year cells with zeros
+. sort iso FASector year
+
+. fillin iso FASector year
+
+. foreach v in N_entry_industry N_exit_industry N_total_industry {
+  2.     replace `v' = 0 if missing(`v')
+  3. }
+(44,922 real changes made)
+(44,922 real changes made)
+(44,922 real changes made)
+
+. 
+. * 3. Common variables for estimation
+. gen GBR = (iso == "GBR")
+
+. 
+. * Comparison group: EU high-income countries (incl. UK)
+. gen is_EU_HI = inlist(iso, "AUT", "BEL", "DNK", "FIN", "FRA", "DEU", "IRL", "ITA") | ///
+>                inlist(iso, "LUX", "NLD", "SWE", "GBR")
+
+. gen sample_HI = (is_EU_HI == 1)
+
+. 
+. * Extended comparison group: add non-EU high-income countries
+. * (consistent with Tab4.do)
+. gen is_NonEU_HI = inlist(iso, "CAN", "AUS", "CHE", "KOR", "NZL")
+
+. gen sample_ALL = (is_EU_HI == 1 | is_NonEU_HI == 1)
+
+. 
+. egen id = group(iso FASector)
+
+. egen year_sector = group(year FASector)
+
+. 
+. * Reference year for event study
+. local ref_year 2014
+
+. 
+. * UK × year indicators (exclude reference year)
+. local years_es ""
+
+. local order_es ""
+
+. local labels_es ""
+
+. forvalues y = 2010(2)2020 {
+  2.     if `y' != `ref_year' {
+  3.     gen GBR_`y' = (GBR == 1 & year == `y')
+  4.     local years_es "`years_es' GBR_`y'"
+  5.     local order_es "`order_es' GBR_`y'"
+  6.     local labels_es `"`labels_es' GBR_`y' "~~UK $\times$ Year `y' [ES]""'
+  7.     }
+  8. }
+
+. 
+. * cohort for jwdid (single treated cohort = 2016)
+. gen cohort = cond(GBR == 1, 2016, 0)
+
+. 
+. * --- Estimation section ---
+. * Requires: ppmlhdfe, jwdid, estout
+. 
+. * A. Entry count (EU high-income comparison)
+. * PPML event study with iso×industry FE (id) and year FE
+. ppmlhdfe N_entry_industry `years_es' if sample_HI, absorb(id year) cluster(iso FASector)
+(dropped 3378 observations that are either singletons or separated by a fixed effect)
+Iteration 1:   deviance = 1.5807e+03  eps = .         iters = 4    tol = 1.0e-04  min(eta) =  -2.36  P   
+Iteration 2:   deviance = 1.4773e+03  eps = 7.00e-02  iters = 3    tol = 1.0e-04  min(eta) =  -2.74      
+Iteration 3:   deviance = 1.4749e+03  eps = 1.64e-03  iters = 3    tol = 1.0e-04  min(eta) =  -2.82      
+Iteration 4:   deviance = 1.4749e+03  eps = 2.01e-06  iters = 2    tol = 1.0e-04  min(eta) =  -2.82      
+Iteration 5:   deviance = 1.4749e+03  eps = 7.88e-12  iters = 2    tol = 1.0e-05  min(eta) =  -2.82   S  
+Iteration 6:   deviance = 1.4749e+03  eps = 0.00e+00  iters = 2    tol = 1.0e-07  min(eta) =  -2.82   S  
+Iteration 7:   deviance = 1.4749e+03  eps = 0.00e+00  iters = 1    tol = 1.0e-09  min(eta) =  -2.82   S O
+------------------------------------------------------------------------------------------------------------
+(legend: p: exact partial-out   s: exact solver   h: step-halving   o: epsilon below tolerance)
+Converged in 7 iterations and 17 HDFE sub-iterations (tol = 1.0e-08)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Gelbach & Miller applied.
+warning: missing F statistic; dropped variables due to collinearity or too few clusters
+
+HDFE PPML regression                              No. of obs      =      1,734
+Absorbing 2 HDFE groups                           Residual df     =         11
+Statistics robust to heteroskedasticity           Wald chi2(5)    =          .
+Deviance             =   1474.93093               Prob > chi2     =          .
+Log pseudolikelihood = -1468.235495               Pseudo R2       =     0.3619
+
+Number of clusters (iso)    =         12
+Number of clusters (FASector)=        63
+                          (Std. err. adjusted for 12 clusters in iso FASector)
+------------------------------------------------------------------------------
+             |               Robust
+N_entry_in~y | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    GBR_2010 |   -.381223   .0993296    -3.84   0.000    -.5759054   -.1865406
+    GBR_2012 |  -.0317857   .1246892    -0.25   0.799     -.276172    .2126005
+    GBR_2016 |  -.3683544   .0958189    -3.84   0.000     -.556156   -.1805527
+    GBR_2018 |  -.1157977   .0886945    -1.31   0.192    -.2896357    .0580403
+    GBR_2020 |   -.894467    .101536    -8.81   0.000    -1.093474   -.6954602
+       _cons |   .3805586    .007827    48.62   0.000     .3652181    .3958992
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+          id |       289         289           0    *|
+        year |         6           1           5     |
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+. estadd local outcome "Entry"
+
+added macro:
+            e(outcome) : "Entry"
+
+. estimates store m_entry_es
+
+. 
+. * Pooled Poisson QMLE DiD (dynamic ATT) with iso×industry FE via ivar(id)
+. * and year×sector FE via fevar(year_sector), as in DiD_notes15_NRY2024.qmd.
+. *
+. * - Default jwdid aggregation corresponds to heterogeneity-robust (ETWFE-style) aggregation.
+. * - Linear TWFE event study (OLS) is estimated with reghdfe and reported together with PPML ES.
+. jwdid N_entry_industry if sample_HI, ivar(id) tvar(year) gvar(cohort) method(ppmlhdfe) fevar(year_sector) cluster(iso FASector) never
+warning: keeping singleton groups will keep fixed effects that cause separation
+ $$ Stopping (no negative residuals); separation found in 3793 observations (16 iterations and 32 subiterations)
+(ReLU method dropped 3793 separated observations in 16 iterations)
+Iteration 1:   deviance = 1.0304e+03  eps = .         iters = 7    tol = 1.0e-04  min(eta) =  -2.28  P   
+Iteration 2:   deviance = 9.4783e+02  eps = 8.71e-02  iters = 8    tol = 1.0e-04  min(eta) =  -3.91      
+Iteration 3:   deviance = 9.4212e+02  eps = 6.06e-03  iters = 9    tol = 1.0e-04  min(eta) =  -5.72      
+Iteration 4:   deviance = 9.4085e+02  eps = 1.36e-03  iters = 8    tol = 1.0e-04  min(eta) =  -7.58      
+Iteration 5:   deviance = 9.4038e+02  eps = 4.99e-04  iters = 6    tol = 1.0e-04  min(eta) =  -9.11      
+Iteration 6:   deviance = 9.4019e+02  eps = 1.95e-04  iters = 7    tol = 1.0e-04  min(eta) = -11.08      
+Iteration 7:   deviance = 9.4016e+02  eps = 3.89e-05  iters = 3    tol = 1.0e-04  min(eta) = -11.72      
+Iteration 8:   deviance = 9.4011e+02  eps = 4.75e-05  iters = 6    tol = 1.0e-05  min(eta) = -13.63   S  
+Iteration 9:   deviance = 9.4010e+02  eps = 1.49e-05  iters = 4    tol = 1.0e-05  min(eta) = -15.13      
+Iteration 10:  deviance = 9.4010e+02  eps = 2.92e-06  iters = 4    tol = 1.0e-05  min(eta) = -15.53   S  
+Iteration 11:  deviance = 9.4009e+02  eps = 7.11e-06  iters = 7    tol = 1.0e-06  min(eta) = -17.50   S  
+Iteration 12:  deviance = 9.4009e+02  eps = 1.07e-06  iters = 4    tol = 1.0e-06  min(eta) = -18.17      
+Iteration 13:  deviance = 9.4009e+02  eps = 7.01e-07  iters = 4    tol = 1.0e-06  min(eta) = -18.64   S  
+Iteration 14:  deviance = 9.4009e+02  eps = 1.50e-06  iters = 7    tol = 1.0e-07  min(eta) = -20.61   S  
+Iteration 15:  deviance = 9.4009e+02  eps = 5.12e-10  iters = 2    tol = 1.0e-07  min(eta) = -20.61   S  
+Iteration 16:  deviance = 9.4008e+02  eps = 5.50e-07  iters = 8    tol = 1.0e-08  min(eta) = -22.61   S  
+Iteration 17:  deviance = 9.4008e+02  eps = 1.98e-07  iters = 279  tol = 1.0e-09  min(eta) = -24.54   S  
+Iteration 18:  deviance = 9.4008e+02  eps = 6.84e-08  iters = 147  tol = 1.0e-09  min(eta) = -26.20   S  
+Iteration 19:  deviance = 9.4008e+02  eps = 8.69e-14  iters = 2    tol = 1.0e-09  min(eta) = -26.20   S O
+------------------------------------------------------------------------------------------------------------
+(legend: p: exact partial-out   s: exact solver   h: step-halving   o: epsilon below tolerance)
+Converged in 19 iterations and 522 HDFE sub-iterations (tol = 1.0e-08)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Gelbach & Miller applied.
+warning: missing F statistic; dropped variables due to collinearity or too few clusters
+
+HDFE PPML regression                              No. of obs      =      1,319
+Absorbing 3 HDFE groups                           Residual df     =         11
+Statistics robust to heteroskedasticity           Wald chi2(5)    =          .
+Deviance             =  940.0847424               Prob > chi2     =          .
+Log pseudolikelihood = -1200.812402               Pseudo R2       =     0.3931
+
+Number of clusters (iso)    =         12
+Number of clusters (FASector)=        63
+                                  (Std. err. adjusted for 12 clusters in iso FASector)
+--------------------------------------------------------------------------------------
+                     |               Robust
+    N_entry_industry | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+cohort#year#c.__tr__ |
+          2016 2010  |  -.7023432   .1751074    -4.01   0.000    -1.045547    -.359139
+          2016 2012  |  -.1541876   .1882706    -0.82   0.413    -.5231913    .2148161
+          2016 2016  |  -.5549911   .2276223    -2.44   0.015    -1.001123   -.1088595
+          2016 2018  |  -.3667926   .1781951    -2.06   0.040    -.7160486   -.0175365
+          2016 2020  |  -1.002045   .1896588    -5.28   0.000    -1.373769   -.6303202
+                     |
+               _cons |   .6506255   .0316589    20.55   0.000     .5885752    .7126759
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+          id |       289         289           0    *|
+        year |         6           1           5     |
+ year_sector |       239         239           0    *|
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+. estadd local het "ETWFE"
+
+added macro:
+                e(het) : "ETWFE"
+
+. estimates store m_entry_att_etwfe
+
+. 
+. estadd local outcome "Entry"
+
+added macro:
+            e(outcome) : "Entry"
+
+. 
+. * B. Exit count (EU high-income comparison)
+. ppmlhdfe N_exit_industry `years_es' if sample_HI, absorb(id year) cluster(iso FASector)
+(dropped 3432 observations that are either singletons or separated by a fixed effect)
+Iteration 1:   deviance = 1.4692e+03  eps = .         iters = 4    tol = 1.0e-04  min(eta) =  -1.90  P   
+Iteration 2:   deviance = 1.3911e+03  eps = 5.61e-02  iters = 3    tol = 1.0e-04  min(eta) =  -2.23      
+Iteration 3:   deviance = 1.3896e+03  eps = 1.08e-03  iters = 2    tol = 1.0e-04  min(eta) =  -2.30      
+Iteration 4:   deviance = 1.3896e+03  eps = 1.01e-06  iters = 2    tol = 1.0e-04  min(eta) =  -2.30      
+Iteration 5:   deviance = 1.3896e+03  eps = 2.16e-12  iters = 2    tol = 1.0e-05  min(eta) =  -2.30   S  
+Iteration 6:   deviance = 1.3896e+03  eps = 0.00e+00  iters = 2    tol = 1.0e-07  min(eta) =  -2.30   S O
+------------------------------------------------------------------------------------------------------------
+(legend: p: exact partial-out   s: exact solver   h: step-halving   o: epsilon below tolerance)
+Converged in 6 iterations and 15 HDFE sub-iterations (tol = 1.0e-08)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Gelbach & Miller applied.
+warning: missing F statistic; dropped variables due to collinearity or too few clusters
+
+HDFE PPML regression                              No. of obs      =      1,680
+Absorbing 2 HDFE groups                           Residual df     =         11
+Statistics robust to heteroskedasticity           Wald chi2(5)    =          .
+Deviance             =  1389.637866               Prob > chi2     =          .
+Log pseudolikelihood = -1446.293164               Pseudo R2       =     0.3202
+
+Number of clusters (iso)    =         12
+Number of clusters (FASector)=        66
+                          (Std. err. adjusted for 12 clusters in iso FASector)
+------------------------------------------------------------------------------
+             |               Robust
+N_exit_ind~y | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    GBR_2010 |   .2975503   .0406764     7.32   0.000      .217826    .3772747
+    GBR_2012 |  -.0888857   .0816615    -1.09   0.276    -.2489393    .0711679
+    GBR_2016 |  -.0935261    .113351    -0.83   0.409    -.3156899    .1286378
+    GBR_2018 |  -.0198383   .1458332    -0.14   0.892    -.3056661    .2659894
+    GBR_2020 |   .3764776   .1390596     2.71   0.007     .1039258    .6490294
+       _cons |   .1839616   .0139797    13.16   0.000     .1565619    .2113612
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+          id |       280         280           0    *|
+        year |         6           1           5     |
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+. estadd local outcome "Exit"
+
+added macro:
+            e(outcome) : "Exit"
+
+. estimates store m_exit_es
+
+. 
+. jwdid N_exit_industry if sample_HI, ivar(id) tvar(year) gvar(cohort) method(ppmlhdfe) fevar(year_sector) cluster(iso FASector) never
+warning: keeping singleton groups will keep fixed effects that cause separation
+(ReLU separation check: maximum number of iterations reached; aborting)
+Iteration 1:   deviance = 1.5318e+03  eps = .         iters = 6    tol = 1.0e-04  min(eta) =  -4.69  P   
+Iteration 2:   deviance = 1.0973e+03  eps = 3.96e-01  iters = 3    tol = 1.0e-04  min(eta) =  -6.40      
+Iteration 3:   deviance = 9.7468e+02  eps = 1.26e-01  iters = 3    tol = 1.0e-04  min(eta) =  -8.34      
+Iteration 4:   deviance = 9.2772e+02  eps = 5.06e-02  iters = 3    tol = 1.0e-04  min(eta) = -10.33      
+Iteration 5:   deviance = 9.0924e+02  eps = 2.03e-02  iters = 3    tol = 1.0e-04  min(eta) = -12.33      
+Iteration 6:   deviance = 9.0216e+02  eps = 7.84e-03  iters = 2    tol = 1.0e-04  min(eta) = -14.32      
+Iteration 7:   deviance = 8.9951e+02  eps = 2.95e-03  iters = 2    tol = 1.0e-04  min(eta) = -16.32      
+Iteration 8:   deviance = 8.9853e+02  eps = 1.09e-03  iters = 2    tol = 1.0e-04  min(eta) = -18.32      
+Iteration 9:   deviance = 8.9816e+02  eps = 4.04e-04  iters = 2    tol = 1.0e-04  min(eta) = -20.32      
+Iteration 10:  deviance = 8.9803e+02  eps = 1.49e-04  iters = 2    tol = 1.0e-04  min(eta) = -22.32      
+Iteration 11:  deviance = 8.9798e+02  eps = 5.48e-05  iters = 2    tol = 1.0e-04  min(eta) = -24.32      
+Iteration 12:  deviance = 8.9796e+02  eps = 2.02e-05  iters = 2    tol = 1.0e-05  min(eta) = -26.32      
+Iteration 13:  deviance = 8.9796e+02  eps = 7.41e-06  iters = 2    tol = 1.0e-05  min(eta) = -28.32   S  
+Iteration 14:  deviance = 8.9795e+02  eps = 2.73e-06  iters = 2    tol = 1.0e-06  min(eta) = -30.32   S  
+Iteration 15:  deviance = 8.9795e+02  eps = 1.00e-06  iters = 2    tol = 1.0e-06  min(eta) = -32.32   S  
+Iteration 16:  deviance = 8.9795e+02  eps = 3.69e-07  iters = 2    tol = 1.0e-06  min(eta) = -34.32   S  
+Iteration 17:  deviance = 8.9795e+02  eps = 1.36e-07  iters = 2    tol = 1.0e-07  min(eta) = -36.32   S  
+Iteration 18:  deviance = 8.9795e+02  eps = 5.00e-08  iters = 2    tol = 1.0e-07  min(eta) = -38.32   S  
+Iteration 19:  deviance = 8.9795e+02  eps = 1.84e-08  iters = 2    tol = 1.0e-09  min(eta) = -40.32   S  
+Iteration 20:  deviance = 8.9795e+02  eps = 6.76e-09  iters = 2    tol = 1.0e-09  min(eta) = -42.32   S O
+------------------------------------------------------------------------------------------------------------
+(legend: p: exact partial-out   s: exact solver   h: step-halving   o: epsilon below tolerance)
+Converged in 20 iterations and 48 HDFE sub-iterations (tol = 1.0e-08)
+
+HDFE PPML regression                              No. of obs      =      5,112
+Absorbing 3 HDFE groups                           Residual df     =         11
+Statistics robust to heteroskedasticity           Wald chi2(5)    =      23.22
+Deviance             =  897.9526772               Prob > chi2     =     0.0003
+Log pseudolikelihood =  -1200.45057               Pseudo R2       =     0.6475
+
+Number of clusters (iso)    =         12
+Number of clusters (FASector)=        71
+                                  (Std. err. adjusted for 12 clusters in iso FASector)
+--------------------------------------------------------------------------------------
+                     |               Robust
+     N_exit_industry | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+cohort#year#c.__tr__ |
+          2016 2010  |   .3923974   .1690261     2.32   0.020     .0611122    .7236825
+          2016 2012  |  -.2516012   .1727693    -1.46   0.145    -.5902229    .0870204
+          2016 2016  |  -.0740383   .1637369    -0.45   0.651    -.3949568    .2468801
+          2016 2018  |  -.1266755   .2398871    -0.53   0.597    -.5968455    .3434945
+          2016 2020  |   .1833966   .1796073     1.02   0.307    -.1686272    .5354204
+                     |
+               _cons |   .4154857   .0356726    11.65   0.000     .3455688    .4854026
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+          id |       852         852           0    *|
+        year |         6           1           5     |
+ year_sector |       426         426           0    *|
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+. estadd local het "ETWFE"
+
+added macro:
+                e(het) : "ETWFE"
+
+. estimates store m_exit_att_etwfe
+
+. 
+. estadd local outcome "Exit"
+
+added macro:
+            e(outcome) : "Exit"
+
+. 
+. * C. Entry count (All high-income comparison: EU HI + non-EU HI)
+. ppmlhdfe N_entry_industry `years_es' if sample_ALL, absorb(id year) cluster(iso FASector)
+(dropped 4404 observations that are either singletons or separated by a fixed effect)
+Iteration 1:   deviance = 2.5842e+03  eps = .         iters = 4    tol = 1.0e-04  min(eta) =  -2.38  P   
+Iteration 2:   deviance = 2.4127e+03  eps = 7.11e-02  iters = 3    tol = 1.0e-04  min(eta) =  -2.78      
+Iteration 3:   deviance = 2.4088e+03  eps = 1.62e-03  iters = 2    tol = 1.0e-04  min(eta) =  -2.87      
+Iteration 4:   deviance = 2.4088e+03  eps = 2.00e-06  iters = 2    tol = 1.0e-04  min(eta) =  -2.88      
+Iteration 5:   deviance = 2.4088e+03  eps = 6.98e-12  iters = 2    tol = 1.0e-05  min(eta) =  -2.88   S  
+Iteration 6:   deviance = 2.4088e+03  eps = 1.43e-16  iters = 2    tol = 1.0e-07  min(eta) =  -2.88   S  
+Iteration 7:   deviance = 2.4088e+03  eps = 1.43e-16  iters = 1    tol = 1.0e-09  min(eta) =  -2.88   S O
+------------------------------------------------------------------------------------------------------------
+(legend: p: exact partial-out   s: exact solver   h: step-halving   o: epsilon below tolerance)
+Converged in 7 iterations and 16 HDFE sub-iterations (tol = 1.0e-08)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Gelbach & Miller applied.
+warning: missing F statistic; dropped variables due to collinearity or too few clusters
+
+HDFE PPML regression                              No. of obs      =      2,838
+Absorbing 2 HDFE groups                           Residual df     =         16
+Statistics robust to heteroskedasticity           Wald chi2(5)    =          .
+Deviance             =  2408.804939               Prob > chi2     =          .
+Log pseudolikelihood = -2440.281013               Pseudo R2       =     0.3798
+
+Number of clusters (iso)    =         17
+Number of clusters (FASector)=        67
+                          (Std. err. adjusted for 17 clusters in iso FASector)
+------------------------------------------------------------------------------
+             |               Robust
+N_entry_in~y | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    GBR_2010 |  -.2785439   .1132264    -2.46   0.014    -.5004636   -.0566242
+    GBR_2012 |  -.0053542   .0688527    -0.08   0.938    -.1403031    .1295947
+    GBR_2016 |  -.1941117   .1656721    -1.17   0.241    -.5188232    .1305997
+    GBR_2018 |  -.0602586   .1232125    -0.49   0.625    -.3017506    .1812335
+    GBR_2020 |  -.5837053    .213805    -2.73   0.006    -1.002755   -.1646552
+       _cons |   .4236507   .0112582    37.63   0.000     .4015851    .4457162
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+          id |       473         473           0    *|
+        year |         6           1           5     |
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+. estadd local outcome "Entry"
+
+added macro:
+            e(outcome) : "Entry"
+
+. estimates store m_entry_es_all
+
+. 
+. jwdid N_entry_industry if sample_ALL, ivar(id) tvar(year) gvar(cohort) method(ppmlhdfe) fevar(year_sector) cluster(iso FASector) never
+warning: keeping singleton groups will keep fixed effects that cause separation
+ $$ Stopping (no negative residuals); separation found in 4889 observations (24 iterations and 41 subiterations)
+(ReLU method dropped 4889 separated observations in 24 iterations)
+Iteration 1:   deviance = 1.9262e+03  eps = .         iters = 8    tol = 1.0e-04  min(eta) =  -2.56  P   
+Iteration 2:   deviance = 1.7746e+03  eps = 8.54e-02  iters = 9    tol = 1.0e-04  min(eta) =  -4.25      
+Iteration 3:   deviance = 1.7655e+03  eps = 5.16e-03  iters = 10   tol = 1.0e-04  min(eta) =  -6.02      
+Iteration 4:   deviance = 1.7637e+03  eps = 1.02e-03  iters = 7    tol = 1.0e-04  min(eta) =  -7.89      
+Iteration 5:   deviance = 1.7630e+03  eps = 3.77e-04  iters = 6    tol = 1.0e-04  min(eta) =  -9.85      
+Iteration 6:   deviance = 1.7629e+03  eps = 1.08e-04  iters = 3    tol = 1.0e-04  min(eta) = -10.93      
+Iteration 7:   deviance = 1.7628e+03  eps = 4.04e-05  iters = 3    tol = 1.0e-04  min(eta) = -11.82      
+Iteration 8:   deviance = 1.7627e+03  eps = 5.11e-05  iters = 5    tol = 1.0e-05  min(eta) = -13.75      
+Iteration 9:   deviance = 1.7627e+03  eps = 6.36e-06  iters = 3    tol = 1.0e-05  min(eta) = -14.18      
+Iteration 10:  deviance = 1.7627e+03  eps = 1.50e-05  iters = 6    tol = 1.0e-06  min(eta) = -16.18   S  
+Iteration 11:  deviance = 1.7626e+03  eps = 5.51e-06  iters = 6    tol = 1.0e-06  min(eta) = -18.18      
+Iteration 12:  deviance = 1.7626e+03  eps = 2.03e-06  iters = 6    tol = 1.0e-06  min(eta) = -20.18   S  
+Iteration 13:  deviance = 1.7626e+03  eps = 7.46e-07  iters = 6    tol = 1.0e-06  min(eta) = -22.18   S  
+Iteration 14:  deviance = 1.7626e+03  eps = 2.21e-09  iters = 3    tol = 1.0e-07  min(eta) = -22.19   S  
+Iteration 15:  deviance = 1.7626e+03  eps = 2.09e-07  iters = 14   tol = 1.0e-08  min(eta) = -23.53   S  
+Iteration 16:  deviance = 1.7626e+03  eps = 1.17e-07  iters = 271  tol = 1.0e-09  min(eta) = -25.01   S  
+Iteration 17:  deviance = 1.7626e+03  eps = 5.73e-08  iters = 271  tol = 1.0e-09  min(eta) = -26.56   S  
+Iteration 18:  deviance = 1.7626e+03  eps = 1.05e-13  iters = 2    tol = 1.0e-09  min(eta) = -26.56   S O
+------------------------------------------------------------------------------------------------------------
+(legend: p: exact partial-out   s: exact solver   h: step-halving   o: epsilon below tolerance)
+Converged in 18 iterations and 639 HDFE sub-iterations (tol = 1.0e-08)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Gelbach & Miller applied.
+
+HDFE PPML regression                              No. of obs      =      2,353
+Absorbing 3 HDFE groups                           Residual df     =         16
+Statistics robust to heteroskedasticity           Wald chi2(5)    =      21.83
+Deviance             =  1762.636902               Prob > chi2     =     0.0006
+Log pseudolikelihood = -2117.196994               Pseudo R2       =     0.4038
+
+Number of clusters (iso)    =         17
+Number of clusters (FASector)=        67
+                                  (Std. err. adjusted for 17 clusters in iso FASector)
+--------------------------------------------------------------------------------------
+                     |               Robust
+    N_entry_industry | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+cohort#year#c.__tr__ |
+          2016 2010  |   -.407814   .1278433    -3.19   0.001    -.6583822   -.1572458
+          2016 2012  |  -.0509785   .1459016    -0.35   0.727    -.3369403    .2349834
+          2016 2016  |   -.232416    .188341    -1.23   0.217    -.6015577    .1367256
+          2016 2018  |  -.1671278   .1107387    -1.51   0.131    -.3841716    .0499161
+          2016 2020  |  -.4983644   .2445372    -2.04   0.042    -.9776485   -.0190803
+                     |
+               _cons |   .5890072   .0129144    45.61   0.000     .5636955     .614319
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+          id |       473         473           0    *|
+        year |         6           1           5     |
+ year_sector |       302         302           0    *|
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+. estadd local het "ETWFE"
+
+added macro:
+                e(het) : "ETWFE"
+
+. estimates store m_entry_att_all_etwfe
+
+. 
+. estadd local outcome "Entry"
+
+added macro:
+            e(outcome) : "Entry"
+
+. 
+. * D. Exit count (All high-income comparison: EU HI + non-EU HI)
+. ppmlhdfe N_exit_industry `years_es' if sample_ALL, absorb(id year) cluster(iso FASector)
+(dropped 4566 observations that are either singletons or separated by a fixed effect)
+Iteration 1:   deviance = 2.4122e+03  eps = .         iters = 4    tol = 1.0e-04  min(eta) =  -1.84  P   
+Iteration 2:   deviance = 2.2737e+03  eps = 6.09e-02  iters = 3    tol = 1.0e-04  min(eta) =  -2.14      
+Iteration 3:   deviance = 2.2701e+03  eps = 1.58e-03  iters = 2    tol = 1.0e-04  min(eta) =  -2.20      
+Iteration 4:   deviance = 2.2701e+03  eps = 8.80e-06  iters = 2    tol = 1.0e-04  min(eta) =  -2.20      
+Iteration 5:   deviance = 2.2701e+03  eps = 2.71e-09  iters = 2    tol = 1.0e-05  min(eta) =  -2.20   S  
+Iteration 6:   deviance = 2.2701e+03  eps = 5.02e-16  iters = 2    tol = 1.0e-07  min(eta) =  -2.20   S  
+Iteration 7:   deviance = 2.2701e+03  eps = 0.00e+00  iters = 1    tol = 1.0e-09  min(eta) =  -2.20   S O
+------------------------------------------------------------------------------------------------------------
+(legend: p: exact partial-out   s: exact solver   h: step-halving   o: epsilon below tolerance)
+Converged in 7 iterations and 16 HDFE sub-iterations (tol = 1.0e-08)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Gelbach & Miller applied.
+warning: missing F statistic; dropped variables due to collinearity or too few clusters
+
+HDFE PPML regression                              No. of obs      =      2,676
+Absorbing 2 HDFE groups                           Residual df     =         16
+Statistics robust to heteroskedasticity           Wald chi2(5)    =          .
+Deviance             =  2270.087729               Prob > chi2     =          .
+Log pseudolikelihood = -2325.423924               Pseudo R2       =     0.3141
+
+Number of clusters (iso)    =         17
+Number of clusters (FASector)=        68
+                          (Std. err. adjusted for 17 clusters in iso FASector)
+------------------------------------------------------------------------------
+             |               Robust
+N_exit_ind~y | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    GBR_2010 |   .3467761   .0338993    10.23   0.000     .2803347    .4132175
+    GBR_2012 |   -.011675    .059002    -0.20   0.843    -.1273169    .1039668
+    GBR_2016 |  -.0668225   .0773721    -0.86   0.388     -.218469     .084824
+    GBR_2018 |  -.0464837   .0840695    -0.55   0.580    -.2112569    .1182895
+    GBR_2020 |    .232332   .1004367     2.31   0.021     .0354796    .4291844
+       _cons |   .1830118   .0059035    31.00   0.000     .1714411    .1945824
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+          id |       446         446           0    *|
+        year |         6           1           5     |
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+. estadd local outcome "Exit"
+
+added macro:
+            e(outcome) : "Exit"
+
+. estimates store m_exit_es_all
+
+. 
+. jwdid N_exit_industry if sample_ALL, ivar(id) tvar(year) gvar(cohort) method(ppmlhdfe) fevar(year_sector) cluster(iso FASector) never
+warning: keeping singleton groups will keep fixed effects that cause separation
+ $$ Stopping (no negative residuals); separation found in 4985 observations (19 iterations and 37 subiterations)
+(ReLU method dropped 4985 separated observations in 19 iterations)
+Iteration 1:   deviance = 1.6845e+03  eps = .         iters = 8    tol = 1.0e-04  min(eta) =  -2.74  P   
+Iteration 2:   deviance = 1.5491e+03  eps = 8.74e-02  iters = 10   tol = 1.0e-04  min(eta) =  -4.42      
+Iteration 3:   deviance = 1.5394e+03  eps = 6.33e-03  iters = 10   tol = 1.0e-04  min(eta) =  -6.28      
+Iteration 4:   deviance = 1.5374e+03  eps = 1.28e-03  iters = 9    tol = 1.0e-04  min(eta) =  -8.25      
+Iteration 5:   deviance = 1.5367e+03  eps = 4.67e-04  iters = 8    tol = 1.0e-04  min(eta) = -10.29      
+Iteration 6:   deviance = 1.5365e+03  eps = 1.36e-04  iters = 3    tol = 1.0e-04  min(eta) = -12.00      
+Iteration 7:   deviance = 1.5364e+03  eps = 8.67e-05  iters = 5    tol = 1.0e-04  min(eta) = -14.07      
+Iteration 8:   deviance = 1.5363e+03  eps = 3.42e-05  iters = 6    tol = 1.0e-05  min(eta) = -16.12      
+Iteration 9:   deviance = 1.5363e+03  eps = 1.26e-05  iters = 6    tol = 1.0e-05  min(eta) = -18.13   S  
+Iteration 10:  deviance = 1.5363e+03  eps = 4.20e-06  iters = 4    tol = 1.0e-05  min(eta) = -19.84   S  
+Iteration 11:  deviance = 1.5363e+03  eps = 6.65e-09  iters = 2    tol = 1.0e-06  min(eta) = -19.84   S  
+Iteration 12:  deviance = 1.5363e+03  eps = 1.99e-06  iters = 7    tol = 1.0e-07  min(eta) = -21.85   S  
+Iteration 13:  deviance = 1.5363e+03  eps = 2.60e-07  iters = 4    tol = 1.0e-07  min(eta) = -22.35   S  
+Iteration 14:  deviance = 1.5363e+03  eps = 5.31e-08  iters = 4    tol = 1.0e-07  min(eta) = -22.47   S  
+Iteration 15:  deviance = 1.5363e+03  eps = 5.32e-07  iters = 97   tol = 1.0e-09  min(eta) = -24.44   S  
+Iteration 16:  deviance = 1.5363e+03  eps = 1.91e-07  iters = 83   tol = 1.0e-09  min(eta) = -26.30   S  
+Iteration 17:  deviance = 1.5363e+03  eps = 6.64e-08  iters = 154  tol = 1.0e-09  min(eta) = -27.82   S  
+Iteration 18:  deviance = 1.5363e+03  eps = 1.16e-13  iters = 2    tol = 1.0e-09  min(eta) = -27.82   S O
+------------------------------------------------------------------------------------------------------------
+(legend: p: exact partial-out   s: exact solver   h: step-halving   o: epsilon below tolerance)
+Converged in 18 iterations and 422 HDFE sub-iterations (tol = 1.0e-08)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Gelbach & Miller applied.
+
+HDFE PPML regression                              No. of obs      =      2,257
+Absorbing 3 HDFE groups                           Residual df     =         16
+Statistics robust to heteroskedasticity           Wald chi2(5)    =      26.60
+Deviance             =  1536.285578               Prob > chi2     =     0.0001
+Log pseudolikelihood = -1958.522849               Pseudo R2       =     0.3642
+
+Number of clusters (iso)    =         17
+Number of clusters (FASector)=        68
+                                  (Std. err. adjusted for 17 clusters in iso FASector)
+--------------------------------------------------------------------------------------
+                     |               Robust
+     N_exit_industry | Coefficient  std. err.      z    P>|z|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+cohort#year#c.__tr__ |
+          2016 2010  |   .3870845   .1247377     3.10   0.002     .1426031     .631566
+          2016 2012  |   -.260603   .1218912    -2.14   0.033    -.4995053   -.0217006
+          2016 2016  |  -.0772224   .1150816    -0.67   0.502    -.3027781    .1483333
+          2016 2018  |  -.2761317   .1597986    -1.73   0.084    -.5893313    .0370679
+          2016 2020  |  -.0975237   .1092432    -0.89   0.372    -.3116364     .116589
+                     |
+               _cons |   .4098529   .0157928    25.95   0.000     .3788996    .4408063
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+          id |       446         446           0    *|
+        year |         6           1           5     |
+ year_sector |       311         311           0    *|
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+. estadd local het "ETWFE"
+
+added macro:
+                e(het) : "ETWFE"
+
+. estimates store m_exit_att_all_etwfe
+
+. 
+. estadd local outcome "Exit"
+
+added macro:
+            e(outcome) : "Exit"
+
+. 
+. * --- Linear TWFE event studies (OLS) for comparison with PPML ES ---
+. * Requires: reghdfe
+. *
+. * Note: We cluster at the iso-by-industry level (id). Using two-way clustering
+. * on (iso, FASector) can lead to missing VCEs in some reghdfe versions when
+. * iso×industry FE is absorbed.
+. 
+. * EU high-income comparison
+. reghdfe N_entry_industry `years_es' if sample_HI, absorb(id year) vce(cluster id)
+(MWFE estimator converged in 2 iterations)
+
+HDFE Linear regression                            Number of obs   =      5,112
+Absorbing 2 HDFE groups                           F(   5,    851) =       2.28
+Statistics robust to heteroskedasticity           Prob > F        =     0.0446
+                                                  R-squared       =     0.6704
+                                                  Adj R-squared   =     0.6036
+                                                  Within R-sq.    =     0.0134
+Number of clusters (id)      =        852         Root MSE        =     0.5640
+
+                                   (Std. err. adjusted for 852 clusters in id)
+------------------------------------------------------------------------------
+             |               Robust
+N_entry_in~y | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    GBR_2010 |  -.3585147   .1489109    -2.41   0.016    -.6507905    -.066239
+    GBR_2012 |   .0857875   .2131104     0.40   0.687    -.3324962    .5040711
+    GBR_2016 |  -.1805378   .2022618    -0.89   0.372    -.5775282    .2164527
+    GBR_2018 |  -.0883483   .1600179    -0.55   0.581    -.4024242    .2257277
+    GBR_2020 |   -.553137   .1916253    -2.89   0.004    -.9292506   -.1770234
+       _cons |   .2458387   .0095145    25.84   0.000     .2271641    .2645132
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+          id |       852         852           0    *|
+        year |         6           1           5     |
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+. estimates store m_entry_es_ols
+
+. reghdfe N_exit_industry `years_es' if sample_HI, absorb(id year) vce(cluster id)
+(MWFE estimator converged in 2 iterations)
+
+HDFE Linear regression                            Number of obs   =      5,112
+Absorbing 2 HDFE groups                           F(   5,    851) =       0.89
+Statistics robust to heteroskedasticity           Prob > F        =     0.4890
+                                                  R-squared       =     0.6773
+                                                  Adj R-squared   =     0.6119
+                                                  Within R-sq.    =     0.0026
+Number of clusters (id)      =        852         Root MSE        =     0.4888
+
+                                   (Std. err. adjusted for 852 clusters in id)
+------------------------------------------------------------------------------
+             |               Robust
+N_exit_ind~y | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    GBR_2010 |   .0384123   .1836417     0.21   0.834    -.3220314     .398856
+    GBR_2012 |  -.1946223   .1675751    -1.16   0.246    -.5235311    .1342866
+    GBR_2016 |  -.1293214   .1566255    -0.83   0.409    -.4367389    .1780961
+    GBR_2018 |  -.1049936   .1917614    -0.55   0.584    -.4813743    .2713871
+    GBR_2020 |  -.0115237   .1519406    -0.08   0.940     -.309746    .2866986
+       _cons |   .2301536   .0094003    24.48   0.000     .2117032    .2486041
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+          id |       852         852           0    *|
+        year |         6           1           5     |
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+. estimates store m_exit_es_ols
+
+. 
+. * All high-income comparison
+. reghdfe N_entry_industry `years_es' if sample_ALL, absorb(id year) vce(cluster id)
+(MWFE estimator converged in 2 iterations)
+
+HDFE Linear regression                            Number of obs   =      7,242
+Absorbing 2 HDFE groups                           F(   5,   1206) =       1.81
+Statistics robust to heteroskedasticity           Prob > F        =     0.1082
+                                                  R-squared       =     0.6775
+                                                  Adj R-squared   =     0.6124
+                                                  Within R-sq.    =     0.0062
+Number of clusters (id)      =      1,207         Root MSE        =     0.6290
+
+                                 (Std. err. adjusted for 1,207 clusters in id)
+------------------------------------------------------------------------------
+             |               Robust
+N_entry_in~y | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    GBR_2010 |  -.3239437   .1488562    -2.18   0.030    -.6159896   -.0318977
+    GBR_2012 |   .0792254   .2129248     0.37   0.710    -.3385188    .4969695
+    GBR_2016 |  -.1496479   .2023462    -0.74   0.460    -.5466375    .2473417
+    GBR_2018 |  -.0757042   .1598601    -0.47   0.636     -.389339    .2379305
+    GBR_2020 |  -.4823944   .1916011    -2.52   0.012    -.8583029   -.1064859
+       _cons |   .2915804   .0067134    43.43   0.000     .2784091    .3047516
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+          id |      1207        1207           0    *|
+        year |         6           1           5     |
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+. estimates store m_entry_es_all_ols
+
+. reghdfe N_exit_industry `years_es' if sample_ALL, absorb(id year) vce(cluster id)
+(MWFE estimator converged in 2 iterations)
+
+HDFE Linear regression                            Number of obs   =      7,242
+Absorbing 2 HDFE groups                           F(   5,   1206) =       0.79
+Statistics robust to heteroskedasticity           Prob > F        =     0.5545
+                                                  R-squared       =     0.6521
+                                                  Adj R-squared   =     0.5819
+                                                  Within R-sq.    =     0.0015
+Number of clusters (id)      =      1,207         Root MSE        =     0.5365
+
+                                 (Std. err. adjusted for 1,207 clusters in id)
+------------------------------------------------------------------------------
+             |               Robust
+N_exit_ind~y | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    GBR_2010 |      .0625    .183345     0.34   0.733    -.2972106    .4222106
+    GBR_2012 |  -.1698944   .1671053    -1.02   0.310    -.4977438     .157955
+    GBR_2016 |  -.1197183   .1563599    -0.77   0.444     -.426486    .1870494
+    GBR_2018 |  -.1047535   .1914382    -0.55   0.584    -.4803424    .2708353
+    GBR_2020 |  -.0149648   .1521479    -0.10   0.922    -.3134688    .2835392
+       _cons |   .2549883   .0066214    38.51   0.000     .2419975    .2679791
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+          id |      1207        1207           0    *|
+        year |         6           1           5     |
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+. estimates store m_exit_es_all_ols
+
+. 
+. * --- Output section (LaTeX) ---
+. local data_note "The unit of observation is industry-by-country-by-year (biennial). Columns (1)--(4) use EU high-income countries as the comparison group;
+>  columns (5)--(8) add non-EU high-income countries (CAN, AUS, CHE, KOR, NZL). Outcomes are counts of new Japanese affiliate entries and exits."
+
+. local model_note_etwfe "Dynamic ATT (ETWFE aggregation): pooled Poisson QMLE DiD (jwdid; Wooldridge 2023) with iso-by-industry fixed effects (ivar) and ye
+> ar-by-sector fixed effects (fevar(year_sector))."
+
+. local model_note_es "Columns labeled PPML ES use pooled Poisson QMLE (ppmlhdfe) with iso-by-industry fixed effects and year fixed effects. Columns labeled
+>  OLS ES use linear TWFE event-study (reghdfe) with the same fixed effects."
+
+. local fullwidth_note_start "\end{threeparttable}\par\medskip\parbox{\linewidth}{\footnotesize \textit{Notes:} "
+
+. local fullwidth_note_end "}\end{table}"
+
+. 
+. * Keep: UK×year coefficients for ES columns, and ATT terms from jwdid
+. * jwdid stores dynamic effects using interactions like: 2016.cohort#YYYY.year#c.__tr__
+. local keep_att "2016.cohort#2016.year#c.__tr__ 2016.cohort#2018.year#c.__tr__ 2016.cohort#2020.year#c.__tr__"
+
+. 
+. * --- Export: ETWFE-aggregated ATT table (ATT only) ---
+. esttab m_entry_att_etwfe m_exit_att_etwfe m_entry_att_all_etwfe m_exit_att_all_etwfe
+
+----------------------------------------------------------------------------
+                      (1)             (2)             (3)             (4)   
+             N_entry_in~y    N_exit_ind~y    N_entry_in~y    N_exit_ind~y   
+----------------------------------------------------------------------------
+2016.cohor~_       -0.702***        0.392*         -0.408**         0.387** 
+                  (-4.01)          (2.32)         (-3.19)          (3.10)   
+
+2016.cohor~_       -0.154          -0.252         -0.0510          -0.261*  
+                  (-0.82)         (-1.46)         (-0.35)         (-2.14)   
+
+2016.cohor~_       -0.555*        -0.0740          -0.232         -0.0772   
+                  (-2.44)         (-0.45)         (-1.23)         (-0.67)   
+
+2016.cohor~_       -0.367*         -0.127          -0.167          -0.276   
+                  (-2.06)         (-0.53)         (-1.51)         (-1.73)   
+
+2016.cohor~_       -1.002***        0.183          -0.498*        -0.0975   
+                  (-5.28)          (1.02)         (-2.04)         (-0.89)   
+
+_cons               0.651***        0.415***        0.589***        0.410***
+                  (20.55)         (11.65)         (45.61)         (25.95)   
+----------------------------------------------------------------------------
+N                    1319            5112            2353            2257   
+----------------------------------------------------------------------------
+t statistics in parentheses
+* p<0.05, ** p<0.01, *** p<0.001
+
+. esttab m_entry_att_etwfe m_exit_att_etwfe m_entry_att_all_etwfe m_exit_att_all_etwfe ///
+>     using "Tab4_entry_exit_counts_ETWFE.tex", replace label booktabs nonumbers ///
+>     keep(`keep_att') ///
+>     order(`keep_att') ///
+>     coeflabels(2016.cohort#2016.year#c.__tr__ "~~UK $\times$ Year 2016 [ATT]" ///
+>                2016.cohort#2018.year#c.__tr__ "~~UK $\times$ Year 2018 [ATT]" ///
+>                2016.cohort#2020.year#c.__tr__ "~~UK $\times$ Year 2020 [ATT]") ///
+>     cells(b(star fmt(3)) se(par fmt(3))) starlevels(* 0.05 ** 0.01 *** 0.001) ///
+>     collabels(none) ///
+>     mtitle("(1)" "(2)" "(3)" "(4)") ///
+>     stats(N, fmt(%9.0fc) labels("Observations")) ///
+>     prehead("\begin{table}[!ht]\centering\caption{\label{tab:entryexit_counts_etwfe}The Brexit Referendum's Impact on Entry and Exit Counts: Pooled Poisso
+> n QMLE Dynamic ATT (ETWFE aggregation, 2010--2020)}\begin{threeparttable}\begin{tabular}{l*{4}{c}}\toprule" ///
+>             "\multicolumn{1}{c}{} & \multicolumn{2}{c}{EU High-Income Comparison} & \multicolumn{2}{c}{All High-Income Comparison} \\" ///
+>             "\cmidrule(lr){2-3}\cmidrule(lr){4-5}" ///
+>             "\multicolumn{1}{c}{} & \multicolumn{1}{c}{Entry count} & \multicolumn{1}{c}{Exit count} & \multicolumn{1}{c}{Entry count} & \multicolumn{1}{c
+> }{Exit count} \\" ///
+>             "\midrule") ///
+>     postfoot("\bottomrule\end{tabular}`fullwidth_note_start' `data_note' `model_note_etwfe' Standard errors clustered at the country-by-industry level in 
+> parentheses. * \$p<0.05\$, ** \$p<0.01\$, *** \$p<0.001\$. `fullwidth_note_end'")
+(output written to Tab4_entry_exit_counts_ETWFE.tex)
+
+. 
+. * --- Export: Event-study table (PPML ES + OLS-TWFE ES) ---
+. esttab m_entry_es m_entry_es_ols m_exit_es m_exit_es_ols m_entry_es_all m_entry_es_all_ols m_exit_es_all m_exit_es_all_ols
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+                      (1)             (2)             (3)             (4)             (5)             (6)             (7)             (8)   
+             N_entry_in~y    N_entry_in~y    N_exit_ind~y    N_exit_ind~y    N_entry_in~y    N_entry_in~y    N_exit_ind~y    N_exit_ind~y   
+--------------------------------------------------------------------------------------------------------------------------------------------
+GBR_2010           -0.381***       -0.359*          0.298***       0.0384          -0.279*         -0.324*          0.347***       0.0625   
+                  (-3.84)         (-2.41)          (7.32)          (0.21)         (-2.46)         (-2.18)         (10.23)          (0.34)   
+
+GBR_2012          -0.0318          0.0858         -0.0889          -0.195        -0.00535          0.0792         -0.0117          -0.170   
+                  (-0.25)          (0.40)         (-1.09)         (-1.16)         (-0.08)          (0.37)         (-0.20)         (-1.02)   
+
+GBR_2016           -0.368***       -0.181         -0.0935          -0.129          -0.194          -0.150         -0.0668          -0.120   
+                  (-3.84)         (-0.89)         (-0.83)         (-0.83)         (-1.17)         (-0.74)         (-0.86)         (-0.77)   
+
+GBR_2018           -0.116         -0.0883         -0.0198          -0.105         -0.0603         -0.0757         -0.0465          -0.105   
+                  (-1.31)         (-0.55)         (-0.14)         (-0.55)         (-0.49)         (-0.47)         (-0.55)         (-0.55)   
+
+GBR_2020           -0.894***       -0.553**         0.376**       -0.0115          -0.584**        -0.482*          0.232*        -0.0150   
+                  (-8.81)         (-2.89)          (2.71)         (-0.08)         (-2.73)         (-2.52)          (2.31)         (-0.10)   
+
+_cons               0.381***        0.246***        0.184***        0.230***        0.424***        0.292***        0.183***        0.255***
+                  (48.62)         (25.84)         (13.16)         (24.48)         (37.63)         (43.43)         (31.00)         (38.51)   
+--------------------------------------------------------------------------------------------------------------------------------------------
+N                    1734            5112            1680            5112            2838            7242            2676            7242   
+--------------------------------------------------------------------------------------------------------------------------------------------
+t statistics in parentheses
+* p<0.05, ** p<0.01, *** p<0.001
+
+. esttab m_entry_es m_entry_es_ols m_exit_es m_exit_es_ols m_entry_es_all m_entry_es_all_ols m_exit_es_all m_exit_es_all_ols ///
+>     using "Tab4_entry_exit_counts_ES.tex", replace label booktabs nonumbers ///
+>     keep(`years_es') ///
+>     order(`order_es') ///
+>     coeflabels(`labels_es') ///
+>     cells(b(star fmt(3)) se(par fmt(3))) starlevels(* 0.05 ** 0.01 *** 0.001) ///
+>     collabels(none) ///
+>     mtitle("(1)" "(2)" "(3)" "(4)" "(5)" "(6)" "(7)" "(8)") ///
+>     stats(N, fmt(%9.0fc) labels("Observations")) ///
+>     prehead("\begin{table}[!ht]\centering\caption{\label{tab:entryexit_counts_es}The Brexit Referendum's Impact on Entry and Exit Counts: PPML ES vs OLS-T
+> WFE ES (2010--2020)}\begin{threeparttable}\begin{tabular}{l*{8}{c}}\toprule" ///
+>             "\multicolumn{1}{c}{} & \multicolumn{4}{c}{EU High-Income Comparison} & \multicolumn{4}{c}{All High-Income Comparison} \\" ///
+>             "\cmidrule(lr){2-5}\cmidrule(lr){6-9}" ///
+>             "\multicolumn{1}{c}{} & \multicolumn{2}{c}{Entry count} & \multicolumn{2}{c}{Exit count} & \multicolumn{2}{c}{Entry count} & \multicolumn{2}{c
+> }{Exit count} \\" ///
+>             "\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}" ///
+>             "\multicolumn{1}{c}{} & \multicolumn{1}{c}{PPML ES} & \multicolumn{1}{c}{OLS ES} & \multicolumn{1}{c}{PPML ES} & \multicolumn{1}{c}{OLS ES} & 
+> \multicolumn{1}{c}{PPML ES} & \multicolumn{1}{c}{OLS ES} & \multicolumn{1}{c}{PPML ES} & \multicolumn{1}{c}{OLS ES} \\" ///
+>             "\midrule") ///
+>     postfoot("\bottomrule\end{tabular}`fullwidth_note_start' `data_note' `model_note_es' Standard errors clustered at the country-by-industry level in par
+> entheses. * \$p<0.05\$, ** \$p<0.01\$, *** \$p<0.001\$. `fullwidth_note_end'")
+(output written to Tab4_entry_exit_counts_ES.tex)
+
+. 
+. log close
+      name:  <unnamed>
+       log:  /Users/ayumu/Documents/GitHub/2024Brexit/01_code/03_r_temp/Tab4_EntryExitCount_PooledPoissonQMLE.log
+  log type:  text
+ closed on:  29 May 2026, 15:52:41
+------------------------------------------------------------------------------------------------------------------------------------------------------------

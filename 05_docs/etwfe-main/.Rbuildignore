@@ -1,0 +1,14 @@
+^.git$
+^.*\.Rproj$
+^\.Rproj\.user$
+^README\.Rmd$
+^\.github$
+^\.here$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+cran-comments.md
+^CRAN-SUBMISSION$
+^_TESTING/
+^SCRATCH/
+README.html

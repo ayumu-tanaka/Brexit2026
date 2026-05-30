@@ -1,0 +1,104 @@
+---
+title: "The Worldwide Governance Indicators, 2023 Update"
+author: "Ayumu Tanaka"
+date: "2024-05-25"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # cache results
+                      message=FALSE, # show messages
+                      warning=FALSE) # show warnings
+
+```
+
+
+# The Worldwide Governance Indicators, 2023 Update
+
+- The Worldwide Governance Indicators (WGI) are designed to assess broad patterns in perceptions of governance across countries and over time.
+
+- The WGI aggregate data from more than 30 think tanks, international organizations, nongovernmental organizations, and private firms across the world.
+
+- The WGI feature six aggregate governance indicators for over 200 countries and territories over the period 1996–2022:
+
+  1. Voice and Accountability
+  1. Political Stability and Absence of Violence/Terrorism
+  1. Government Effectiveness
+  1. Regulatory Quality
+  1. Rule of Law
+  1. Control of Corruption
+
+- The WGI are based on a comprehensive review of over 30 data sources, including surveys of households, firms, and experts in the public, private, and nonprofit sectors.
+
+- The WGI are available at the World Bank's website.
+  - [https://www.worldbank.org/en/publication/worldwide-governance-indicators](https://www.worldbank.org/en/publication/worldwide-governance-indicators)
+  -  [wgidataset-stata.zip](https://www.worldbank.org/content/dam/sites/govindicators/doc/wgidataset-stata.zip)
+
+
+# Load the data
+
+```{r}
+library(rio)
+WGI <- import("../unused_data_raw/wgidataset-stata/wgidataset.dta")
+```
+
+# Describe the data 
+
+```{r}
+library(gtsummary)
+library(dplyr)
+# Describe the data
+WGI %>%
+  select(-code) %>%
+  select(-countryname) %>%
+  tbl_summary()
+
+```
+
+
+# Select the necessary columns 
+
+```{r}
+# Keep code year pvr ger rqr rlr ccr
+WGI <- WGI[, c("code", "year", "pvr", "ger", "rqr", "rlr", "ccr")]
+```
+
+# Write the data as CSV using `rio` package
+
+```{r}
+export(WGI, "../unused_output/WGI.rds")
+```
+
+
+# Distribution of the observations
+
+```{r}
+library(ggplot2)
+
+# plot the distribution of the observations by year
+WGI %>%
+  group_by(year) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = year, y = n)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Distribution of the observations by year",
+       x = "Year",
+       y = "Number of observations")
+```
+
+
+# Describe the data again
+
+```{r}
+library(gtsummary)
+WGI %>%
+  select(-code) %>%
+  tbl_summary()
+```
+
+

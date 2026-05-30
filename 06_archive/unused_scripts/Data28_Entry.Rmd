@@ -1,0 +1,265 @@
+---
+title: "Data28: Parent-Country-Year Entry Sample"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE, message = FALSE, warning = FALSE)
+```
+
+# Overview
+
+親会社 × ホスト国 × 年レベルのバランスドパネルを構築し、
+Brexitが新規FDI参入確率に与える影響を分析するためのデータセットを作成する。
+
+**参入の定義**: 親会社 $j$ がホスト国 $h$ に年 $t$ に「参入」するとは、
+年 $t$ が $j$ の子会社が $h$ に初めて現れた年であることを指す。
+
+**サンプルの制限条件**:
+
+1. 調査年: 2010, 2012, 2014, 2016–2020。
+2. ホスト国: 高所得EU諸国 + 非EU高所得国（比較群拡張に備えて含める）。
+3. JP2 に記録されている親会社（2010–2020年に活動中）。
+4. 2010年以前にすでに当該国に子会社を持つペアは除外（既存参加者を除く）。
+
+# パッケージとデータの読み込み
+
+```{r load}
+library(dplyr)   # データ操作
+library(tidyr)   # データ整形（crossing等）
+library(rio)     # データ入出力
+
+jp2 <- rio::import("../../03_data_output/parent_panel_with_sector_codes.dta")  # 親会社情報（JPCode × 年）
+fa6 <- rio::import("../../03_data_output/affiliate_panel_survival_ready.dta")  # 子会社情報（子会社 × 年）
+```
+
+# サンプルパラメータの定義
+
+```{r params}
+# 分析対象の調査年（2年ごと→2014年以降は毎年）
+survey_years <- c(2010, 2012, 2014, 2016, 2017, 2018, 2019, 2020)
+
+# 高所得EU諸国（処置群: GBR、対照群: その他）
+EU_HI <- c("AUT", "BEL", "DEU", "DNK", "FIN", "FRA",
+           "GBR", "IRL", "ITA", "LUX", "NLD", "SWE")
+
+# 非EU高所得国（比較群の拡張に備えて含める）
+NonEU_HI <- c("CAN", "AUS", "CHE", "KOR", "NZL")
+
+# 分析対象の全ホスト国（EU高所得 + 非EU高所得）
+target_countries <- c(EU_HI, NonEU_HI)
+```
+
+# 親会社リスト（JP2）
+
+```{r parents}
+# 2010–2020年の調査年に記録されている親会社のみ抽出
+jp2_sample <- jp2 %>%
+  filter(year %in% survey_years) %>%                     # 調査年のみ
+  select(JPCode, year,                                    # 識別子と年
+         Parent_SectorClass, Parent_SectorClassNameAlph, # 親会社業種（クラス）
+         Parent_SectorCode2009, Parent_SectorNameAlph)   # 親会社業種（詳細）
+
+# 分析期間中に活動している親会社のJPCodeを取得
+active_parents <- unique(jp2_sample$JPCode)
+
+cat("活動中の親会社数:", length(active_parents), "\n")  # 件数確認
+```
+
+# 初回参入年の取得（FA6）
+
+各親会社 × ホスト国ペアについて、子会社が初めて記録された最初の調査年を取得する。
+
+```{r first-entry}
+# FA6から対象ホスト国のみ抽出し、親会社 × 国ペアの初回参入年を集計
+first_entry <- fa6 %>%
+  filter(iso %in% target_countries) %>%           # 対象ホスト国のみ
+  group_by(JPCode, iso) %>%                        # 親会社 × 国でグループ化
+  summarise(first_entry_year = min(year),          # 最初に記録された年を取得
+            .groups = "drop")                      # グループ化を解除
+
+cat("親会社 × ホスト国ペアの総数:", nrow(first_entry), "\n")
+cat("2010年以前の既存参加者ペア数:",
+    nrow(filter(first_entry, first_entry_year < 2010)), "\n")
+cat("2010–2020年の新規参入ペア数:",
+    nrow(filter(first_entry,
+                first_entry_year >= 2010,
+                first_entry_year <= 2020)), "\n")
+```
+
+# 国レベルのコントロール変数
+
+GDP、距離などの国レベル変数をFA6から取得する。
+
+```{r country-controls}
+# FA6から国 × 年レベルのコントロール変数を集計
+country_controls <- fa6 %>%
+  filter(iso %in% target_countries,        # 対象ホスト国のみ
+         year %in% survey_years) %>%        # 調査年のみ
+  group_by(iso, year) %>%                   # 国 × 年でグループ化
+  summarise(
+    GDP_per_capita = first(GDP_per_capita), # 一人当たりGDP
+    GDP_PPP        = first(GDP_PPP),        # 購買力平価GDP
+    Dist           = first(Dist),           # 日本からの距離
+    EU             = first(EU),             # EU加盟国ダミー
+    .groups = "drop"
+  )
+```
+
+# 潜在的参入パネルの構築
+
+## ステップ1：既存参加者ペアの除外
+
+```{r potential-pairs}
+# 2010年以前にすでに当該国に子会社を持つ親会社 × 国ペアを特定
+incumbents <- first_entry %>%
+  filter(first_entry_year < 2010) %>%  # 2010年より前に初回参入したペア
+  select(JPCode, iso)                  # 識別子のみ残す
+
+# 活動中の全親会社 × 全対象国の組み合わせを生成し、既存参加者ペアを除外
+potential_pairs <- expand.grid(
+  JPCode = active_parents,   # 全活動親会社
+  iso    = target_countries, # 全対象ホスト国
+  stringsAsFactors = FALSE   # 文字列をfactorに変換しない
+) %>%
+  anti_join(incumbents, by = c("JPCode", "iso")) %>%  # 既存参加者ペアを除外
+  left_join(first_entry, by = c("JPCode", "iso"))     # 初回参入年を結合
+# first_entry_year = NA は、2010–2020年中に一度も参入しなかったことを意味する
+
+cat("潜在的参入ペア数（2010年以降）:", nrow(potential_pairs), "\n")
+```
+
+## ステップ2：親会社 × 国 × 年パネルへの展開
+
+```{r expand-panel}
+# 潜在的参入ペアを調査年ごとに展開してバランスドパネルを作成
+panel <- potential_pairs %>%
+  crossing(year = survey_years) %>%   # 各ペアに全調査年を付与
+  mutate(
+    entry = case_when(
+      !is.na(first_entry_year) &
+        first_entry_year == year ~ 1L, # 初回参入年と一致する場合: 参入=1
+      TRUE ~ 0L                        # それ以外: 参入=0
+    )
+  )
+
+cat("パネル行数（打切り前）:", nrow(panel), "\n")
+cat("参入イベント数:", sum(panel$entry), "\n")
+```
+
+## ステップ3：参入後の観測を打切り
+
+参入後の観測は「リスク状態」でなくなるため除外する。
+
+```{r censor}
+# 参入後（first_entry_year より後）の年の観測を削除
+panel <- panel %>%
+  filter(is.na(first_entry_year) |   # 未参入ペアは全期間保持
+         year <= first_entry_year)    # 参入ペアは参入年まで保持
+
+cat("パネル行数（打切り後）:", nrow(panel), "\n")
+cat("参入イベント数:", sum(panel$entry), "\n")
+```
+
+## ステップ4：JP2に記録されている年のみ保持
+
+親会社が実際に活動していた年のみを対象とする。
+
+```{r active-filter}
+# JP2 から親会社 × 年の活動記録を取得
+jp2_active <- jp2_sample %>%
+  select(JPCode, year) %>%   # 識別子と年のみ
+  distinct()                 # 重複を除去
+
+# パネルと内部結合して活動中の親会社 × 年のみ残す
+panel <- panel %>%
+  inner_join(jp2_active, by = c("JPCode", "year"))
+
+cat("パネル行数（JP2フィルタ後）:", nrow(panel), "\n")
+```
+
+# 親会社・国レベル変数のマージ
+
+```{r merge}
+panel <- panel %>%
+  left_join(jp2_sample,       by = c("JPCode", "year")) %>%  # 親会社特性を結合
+  left_join(country_controls, by = c("iso", "year"))         # 国レベル変数を結合
+```
+
+# 処置変数の作成
+
+```{r treatment}
+panel <- panel %>%
+  mutate(
+    # 処置国ダミー（GBR = 1）
+    GBR      = ifelse(iso == "GBR", 1L, 0L),
+    # Brexit後ダミー（2016年以降 = 1）
+    post2016 = ifelse(year >= 2016, 1L, 0L),
+    # Brexit処置ダミー（GBR かつ 2016年以降 = 1）
+    treated  = ifelse(iso == "GBR" & year >= 2016, 1L, 0L),
+    # ETWFE用 first_year: GBR=2016（処置開始年）、その他=10000（未処置）
+    first_year = ifelse(iso == "GBR", 2016L, 10000L),
+    # 親会社 × 国ペアの固定効果ID
+    pair_id  = as.integer(factor(paste(JPCode, iso, sep = "_")))
+  )
+```
+
+# 記述統計
+
+```{r summary}
+cat("=== パネルの概要 ===\n")
+cat("行数:", nrow(panel), "\n")                             # 総観測数
+cat("ユニーク親会社数:", n_distinct(panel$JPCode), "\n")   # 親会社数
+cat("ユニーク国数:", n_distinct(panel$iso), "\n")          # ホスト国数
+cat("調査年:", sort(unique(panel$year)), "\n\n")           # 年の確認
+
+cat("=== 年別参入イベント ===\n")
+panel %>%
+  group_by(year) %>%
+  summarise(
+    N       = n(),            # 観測数
+    entries = sum(entry),     # 参入イベント数
+    rate    = mean(entry)     # 参入確率
+  ) %>%
+  print()
+
+cat("\n=== 国別参入イベント ===\n")
+panel %>%
+  group_by(iso) %>%
+  summarise(
+    N       = n(),
+    entries = sum(entry),
+    rate    = mean(entry)
+  ) %>%
+  arrange(desc(entries)) %>%  # 参入数の多い順に並べ替え
+  print()
+
+cat("\n=== 処置群 vs. 対照群 ===\n")
+panel %>%
+  group_by(GBR) %>%
+  summarise(
+    N       = n(),
+    entries = sum(entry),
+    rate    = mean(entry)
+  ) %>%
+  print()
+```
+
+# データの保存
+
+```{r export}
+# Stata形式（.dta）で保存
+rio::export(panel, "../unused_output/ESTparent_entry.dta")
+# R形式（.rds）で保存
+rio::export(panel, "../unused_output/ESTparent_entry.rds")
+
+cat("保存完了: ESTparent_entry.dta / .rds\n")
+cat("変数一覧:\n")
+print(names(panel))  # 変数名を確認
+```

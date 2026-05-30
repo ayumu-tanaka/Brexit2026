@@ -1,0 +1,325 @@
+---
+title: "生存分析用データの作成"
+author: "Ayumu Tanaka"
+date: "2024-05-23"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+
+
+# 準備
+
+
+```{r preparation}
+# ワークスペースの初期化
+rm(list = ls())
+
+# 必要なパッケージの読み込み
+library("rio")           # For importing data 
+library("tidyverse")     # For data manipulation
+library("countrycode")   # For creating the country ISO codes
+library("Hmisc")         # For labeling the variables
+```
+
+
+# データの読み込み
+
+## 入力データ
+- "../../03_data_output/Affiliate/affiliate_panel_with_affiliate_counts.dta"
+
+## 出力データ
+- "../../03_data_output/Affiliate/affiliate_panel_with_affiliate_counts.dta"
+- "../../03_data_output/Affiliate/affiliate_last_observation_panel.dta"
+- "../../03_data_output/Parent/parent_last_observation_panel.dta"
+
+
+```{r load-data}
+## 不要なオブジェクトの削除
+rm(list = ls())
+
+# `affiliate_panel_with_affiliate_counts.dta` の読み込み
+library(rio)
+FA5 <- rio::import("../../03_data_output/Affiliate/affiliate_panel_with_affiliate_counts.dta")
+
+```
+
+
+
+# 変数名の整理
+```{r rename-variables}
+# 変数名の整理
+FA5 <- FA5 %>%
+  rename(firm = Parent_NameAlphabet,
+         Ratio = JOwnRatio,
+         Parent_SectorCode = Parent_SectorCode2009,
+         Parent_SectorName = Parent_SectorNameAlph,
+         Parent_SectorClassNameAlph = Parent_SectorClassNameAlph,
+         Aff_size = PayrollNumber,
+         EU = eu, 
+         EU_all = euall,
+         #Political_Stability = pvr, 
+         #Government_Effectiveness = ger,
+         #Regulatory_Quality = rqr,
+         #Rule_of_Law = rlr, 
+         #Control_of_Corruption = ccr,
+         Dist = dist)
+```
+
+
+# 現地法人レベルの生存分析データ作成
+## 企業・国単位の存続年数を計算
+
+```{r calculate-survival-years-affiliate}
+# 現地法人・国単位の存続年数を計算
+FA5 <- FA5 %>% 
+  group_by(AffiliateCode, iso) %>% 
+  mutate(survival_years = year - min(year) + 1)
+
+
+FA5 <- FA5 %>% 
+  group_by(AffiliateCode, iso) %>% 
+  mutate(min_year = min(year) )
+
+# 存続年数の分布を確認
+hist(FA5$survival_years)
+
+```
+
+
+## 各現地法人について最終年の観測だけ残す
+
+```{r keep-last-year-affiliate}
+
+# 各現地法人について最終年の観測だけ残す
+  aff_last <- FA5 %>% 
+    group_by(AffiliateCode, iso) %>% 
+    filter(year == max(year))
+```
+
+
+## 最終年より前に消えた現地法人を特定
+
+```{r identify-disappeared-affiliate}
+# 最終年より前に消えた現地法人を示す変数を作成
+aff_last <- aff_last %>% 
+  mutate(censored = ifelse(year == max(aff_last$year), 1, 0))
+
+# exit= 0 if censored==1, exit=1 if event==1
+aff_last$exit <- ifelse(aff_last$censored == 1, 0, 1)
+
+# `exit` と `censored` のクロス表を確認
+table(aff_last$exit, aff_last$censored)
+
+# `censored` と `survival_years` を前方へ移動
+aff_last <- aff_last %>% 
+  select(AffiliateCode, JPCode, iso, year, min_year, survival_years, censored, everything())
+
+# `KSKJPCode`・`iso`・`year` で並べ替え
+aff_last <- aff_last %>% 
+  arrange(iso, AffiliateCode, year)
+
+```
+
+## 英国ダミーとBrexitダミーの作成
+```{r create-dummy-variable-affiliate}
+# 英国ダミーを作成
+  aff_last$GBR <- NULL 
+  aff_last <- aff_last %>% 
+    mutate(GBR = ifelse(iso == "GBR", 1, 0))
+  
+# 2016年以降の英国ダミーを作成
+aff_last <- aff_last %>% 
+  mutate(Brexit = ifelse(iso == "GBR" & year >= 2016, 1, 0))
+
+# 英国ダミーとBrexitダミーの観測数を確認
+table(aff_last$GBR, aff_last$Brexit)
+```   
+
+
+## 出資比率の整備
+
+- ParentJPOwnRatio: total ownership ratio of all Japanese parent firms
+- Ratio: ownership ratio of the top Japanese parent firm
+
+- Ratioは欠損値が少しある。
+
+```{r ratio}
+#FA6$Ratio <- FA6$Ratio 
+FA5$Ratio <-    FA5$Ratio * (1/100)
+FA5$RatioAll <- FA5$ParentJPOwnRatio/100
+FA5$ParentJPOwnRatio<- NULL
+
+# `ParentJPOwnRatio > Ratio` の件数を確認
+FA5$D <- ifelse(FA5$RatioAll > FA5$Ratio, 1, 0)
+table(FA5$D)
+FA5$D <- NULL
+
+# `Ratio` の欠損を確認
+table(is.na(FA5$Ratio))
+table(is.na(FA5$RatioAll))
+
+# `Ratio` が欠損なら `ParentJPOwnRatio` で補完
+FA5$Ratio <- ifelse(is.na(FA5$Ratio), FA5$RatioAll, FA5$Ratio)
+```
+
+
+
+
+
+# 親会社レベルの生存分析データ作成
+## 企業×国×年単位へ集計
+
+It takes significant time to collapse the data by firm, iso, and year with the `tidyverse` package. Therefore, I use `data.table` to collapse the data.
+
+
+
+```{r collapse-data-by-firm-iso-year}
+library(data.table)
+# `FA5` を `data.table` に変換
+setDT(FA5)
+# `JPCode`・`iso`・`year` ごとに集計
+parent <- FA5[, .(
+  N_Aff = .N,
+  firm = first(firm),
+  Ratio = mean(Ratio),
+  Parent_SectorCode = first(Parent_SectorCode),
+  Parent_SectorName = first(Parent_SectorName),
+  Parent_SectorClass = first(Parent_SectorClass),
+  Parent_SectorClassNameAlph = first(Parent_SectorClassNameAlph),
+  Aff_size = sum(Aff_size),
+  EU = first(EU),
+  EU_all = first(EU_all),
+  countryname = first(countryname),
+  GDP_PPP = first(GDP_PPP),
+  GDP_per_capita = first(GDP_per_capita),
+  #Political_Stability = first(Political_Stability),
+  #Government_Effectiveness = first(Government_Effectiveness),
+  #Regulatory_Quality = first(Regulatory_Quality),
+  #Rule_of_Law = first(Rule_of_Law),
+  #Control_of_Corruption = first(Control_of_Corruption),
+  Dist = first(Dist),
+  N_Aff_EU = first(N_Aff_EU),
+  N_Aff_GBR = first(N_Aff_GBR)
+), by = .(JPCode, iso, year)]
+
+```
+
+
+The following code is too slow to run. I will use the code above instead.
+
+```
+library(dplyr)
+
+# `JPCode`・`iso`・`year` ごとの観測数を計算
+parent <- FA5 %>% 
+  group_by(JPCode, iso, year) %>% 
+  summarise(N_Aff = n(), 
+            firm = first(firm), 
+            Ratio = mean(Ratio),
+            Parent_SectorCode = first(Parent_SectorCode), 
+            Parent_SectorName = first(Parent_SectorName),
+            Parent_SectorClass = first(Parent_SectorClass),
+            Parent_SectorClassNameAlph = first(Parent_SectorClassNameAlph),
+            Aff_size = sum(Aff_size),
+            EU = first(EU), 
+            EU_all = first(EU_all), 
+            countryname = first(countryname),
+            GDP_PPP = first(GDP_PPP), 
+            GDP_per_capita = first(GDP_per_capita),
+            Political_Stability = first(Political_Stability), 
+            Government_Effectiveness = first(Government_Effectiveness), 
+            Regulatory_Quality = first(Regulatory_Quality),
+            Rule_of_Law = first(Rule_of_Law), 
+            Control_of_Corruption = first(Control_of_Corruption),
+            Dist = first(Dist),
+            N_Aff_EU = first(N_Aff_EU),
+            N_Aff_GBR = first(N_Aff_GBR),
+            )
+
+```
+
+## 企業・国単位の存続年数を計算
+
+```{r calculate-survival-years}
+# 企業・国単位の存続年数を計算
+parent <- parent %>% 
+  group_by(JPCode, iso) %>% 
+  mutate(survival_years = year - min(year) + 1)
+
+# 存続年数の分布を確認
+hist(parent$survival_years)
+
+```
+
+
+## 各企業について最終年の観測だけ残す
+
+```{r keep-last-year}
+
+# 各企業について最終年の観測だけ残す
+  parent_last <- parent %>% 
+    group_by(JPCode, iso) %>% 
+    filter(year == max(year))
+```
+
+## 最終年より前に消えた企業を特定
+
+```{r identify-disappeared-firms}
+# 最終年より前に消えた企業を示す変数を作成
+parent_last <- parent_last %>% 
+  mutate(censored = ifelse(year == max(parent_last$year), 1, 0))
+
+# exit= 0 if censored==1, exit=1 if event==1
+parent_last$exit <- ifelse(parent_last$censored == 1, 0, 1)
+
+# `exit` と `censored` のクロス表を確認
+table(parent_last$exit, parent_last$censored)
+
+# `censored` と `survival_years` を前方へ移動
+parent_last <- parent_last %>% 
+  select(JPCode, iso, year, censored, survival_years, everything())
+
+# `KSKJPCode`・`iso`・`year` で並べ替え
+parent_last <- parent_last %>% 
+  arrange(JPCode, iso, year)
+
+```
+
+
+## 英国ダミーとBrexitダミーの作成
+```{r create-dummy-variable}
+# 英国ダミーを作成
+parent_last <- parent_last %>% 
+  mutate(GBR = ifelse(iso == "GBR", 1, 0))
+
+# 2016年以降の英国ダミーを作成
+parent_last <- parent_last %>% 
+  mutate(Brexit = ifelse(iso == "GBR" & year >= 2016, 1, 0))
+
+# 英国ダミーとBrexitダミーの観測数を確認
+table(parent_last$GBR, parent_last$Brexit)
+```   
+
+
+## データの保存
+```{r save-data}
+# データの保存
+rio::export(parent_last, "../../03_data_output/Parent/parent_last_observation_panel.dta")
+
+
+# データの保存
+rio::export(FA5, "../../03_data_output/Affiliate/affiliate_panel_survival_ready.dta")
+rio::export(aff_last, "../../03_data_output/Affiliate/affiliate_last_observation_panel.dta")
+```

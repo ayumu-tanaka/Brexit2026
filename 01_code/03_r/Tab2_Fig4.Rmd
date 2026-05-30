@@ -1,0 +1,386 @@
+---
+title: "TWFE・ETWFEによる退出の推定"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+# パッケージの読み込み
+
+```{r load-package}
+library(tidyverse)
+```
+
+
+# データの読み込み
+```{r data}
+aff_eu <- rio::import("../../03_data_output/Affiliate/affiliate_panel_brexit_eu_sample.dta")
+
+aff_highEU <- rio::import("../../03_data_output/Affiliate/affiliate_panel_brexit_high_income_eu_sample.dta")
+
+aff_oecd <- rio::import("../../03_data_output/Affiliate/affiliate_panel_brexit_non_eu_oecd_sample.dta")
+
+aff <- rio::import("../../03_data_output/Affiliate/affiliate_panel_brexit_full_sample.dta")
+
+
+# 2010年から2020年に限定
+aff_eu <- aff_eu %>% filter(year >= 2010 & year <= 2020)
+aff_highEU <- aff_highEU %>% filter(year >= 2010 & year <= 2020)
+aff_oecd <- aff_oecd %>% filter(year >= 2010 & year <= 2020)
+aff <- aff %>% filter(year >= 2010 & year <= 2020)
+
+```
+
+
+# TWFEイベントスタディ
+## Exit-OLS with `fixest`
+
+
+```{r Fig-TWFE-Exit-OLS, dpi = 300}
+
+library(fixest)
+
+twfe_exit_high_income_eu <- fixest::feols(exitit ~   i(year, GBR, 2014) 
+                       | year + AffiliateCode, 
+               data = aff_highEU,
+               vcov = ~ country)
+fixest::etable(twfe_exit_high_income_eu)
+
+twfe_exit_eu <- fixest::feols(exitit ~   i(year, GBR, 2014) 
+                       | year +  AffiliateCode, 
+               data = aff_eu,
+               vcov = ~ country)
+fixest::etable(twfe_exit_eu)
+
+
+# labels
+twfe_exit_high_income_eu_n = as.numeric(twfe_exit_high_income_eu[["nobs"]])
+twfe_exit_eu_n = as.numeric(twfe_exit_eu[["nobs"]])
+legend1 <- "High income EU"
+legend2 <- "EU"
+sample_note <- paste0(
+  "Observations: High income EU, N = ", twfe_exit_high_income_eu_n,
+  "; EU, N = ", twfe_exit_eu_n
+)
+
+# coef
+b <- twfe_exit_high_income_eu[["coefficients"]]
+# decimal to 3
+b <- round(b, 3)
+coef_years <- as.numeric(gsub(".*::([0-9]+).*", "\\1", names(b)))
+coef_labels <- data.frame(year = coef_years, estimate = as.numeric(b))
+
+iplot(list(twfe_exit_high_income_eu, twfe_exit_eu), pt.join = TRUE,
+      main = "Effect of the Brexit referendum on exit probability",
+      sub = "Affiliate-level balanced panel",
+      xlab = "Linear probability model. Two-year event-study bins."
+      ) 
+legend("topleft", col = 1:2, pch = 10, cex = 0.7, lwd = 1, lty = 1:2,
+       legend = c(legend1, legend2),
+       title = "Comparison countries") 
+legend("bottomleft", legend = sample_note, bty = "n", cex = 0.7, text.col = "black")
+# Add value labels
+with(coef_labels, text(year, estimate - 0.01, estimate, cex = 0.7, col = 1))
+
+
+```
+
+
+### High-income EU only
+
+```{r Fig3-TWFE-Exit-OLS-HighEU, dpi = 300}
+
+twfe_exit_high_income_eu_r2 <- as.numeric(fixest::fitstat(twfe_exit_high_income_eu, "r2"))
+
+postscript("../../04_tex/main/Fig4.eps", horizontal = FALSE,
+           width = 8, height = 6)
+fixest::iplot(twfe_exit_high_income_eu, pt.join = TRUE,
+      main = "Effect of the Brexit referendum on exit probability",
+      sub = paste0(
+        "Affiliate-level balanced panel. N = ", twfe_exit_high_income_eu_n,
+        ", R2 = ", sprintf("%.3f", twfe_exit_high_income_eu_r2)
+      ),
+      xlab = "OLS. Two-year event-study bins."
+      ) 
+legend("topleft", col = 1:2, pch = 10, cex = 0.7, lwd = 1, lty = 1:2,
+       legend = c(legend1),
+       title = "Comparison countries") 
+# Add value labels
+with(coef_labels, text(year, estimate - 0.01, estimate, cex = 0.7, col = 1))
+ 
+ dev.off()
+```
+
+
+\newpage
+
+# ETWFEイベントスタディ
+
+## Exit-OLS with `etwfe`
+
+### High income EU
+
+```{r ETWFE-Exit-OLS-HighEU, dpi = 300}
+
+library(etwfe)
+etwfe_exit_high_income_eu <- etwfe::etwfe(exitit ~  1  ,
+               tvar = year, # time var
+               gvar = first_year, # group var
+               #xvar = N_Aff_EU  ,
+               ivar =  year + AffiliateCode, # FEs
+               data = aff_highEU,
+               family = "gaussian",
+               vcov = ~country)
+fixest::etable(etwfe_exit_high_income_eu)
+
+# Marginal effects
+# fixest の固定効果つきモデルでは、最近の marginaleffects は
+# 標準誤差を伴う event-study 効果をそのまま計算できないことがある。
+# ここでは event-study の点推定を得るため、vcov = FALSE を明示する。
+etwfe_exit_high_income_eu_me = etwfe::emfx(etwfe_exit_high_income_eu, type = "event", vcov = FALSE)
+
+
+```
+
+### EU
+
+```{r ETWFE-Exit-OLS-EU, dpi = 300}
+library(etwfe)
+etwfe_exit_eu <- etwfe::etwfe(exitit ~  1  ,
+               tvar = year, # time var
+               gvar = first_year, # group var
+               #xvar = N_Aff_EU  ,
+               ivar =  year + AffiliateCode, # FEs
+               data = aff_eu,
+               family = "gaussian",
+               vcov = ~country)
+fixest::etable(etwfe_exit_eu)
+
+# Marginal effects
+etwfe_exit_eu_me = etwfe::emfx(etwfe_exit_eu, type = "event", vcov = FALSE)
+
+```
+
+
+
+
+
+
+
+
+## Combine the event study results with `etwfe`-OLS
+
+```{r Fig-ETWFE-Exit-OLS, dpi = 300}
+# Add group variable
+etwfe_exit_high_income_eu_me$Control <- "High income EU"
+etwfe_exit_eu_me$Control <- "EU"
+
+# Add event to +0.2 for es8me
+etwfe_exit_eu_me$event <- etwfe_exit_eu_me$event + 0.1
+
+# Combine the two data frames
+es <- rbind(etwfe_exit_high_income_eu_me, etwfe_exit_eu_me)
+
+# value label
+es$estimateLabel <- round(es$estimate,3)
+es$estimateLabel[es$Control == "EU"] <- ""
+
+# Plot the estimate by group
+p_exit_etwfe <- ggplot(es, aes(x = event, y = estimate, col = Control, group = Control)) +
+  geom_hline(yintercept = 0) +
+  labs(x = "Years post treatment (two-year bins)", 
+       y = "Effect of the Brexit referendum",
+       title = "Effects of the Brexit referendum on exit probability",
+       caption = "ETWFE model. OLS. Affiliate-level balanced panel. Two-year event-study bins."
+       ) +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  scale_color_manual(values = c("High income EU" = "darkcyan", "EU" = "darkorange"))  +
+  geom_text(aes(label = estimateLabel), 
+            vjust = -0.5, size = 3, 
+            angle = 45,
+            colour = "black",
+            show.legend = FALSE)
+
+if (all(c("conf.low", "conf.high") %in% names(es))) {
+  p_exit_etwfe <- p_exit_etwfe + geom_pointrange(aes(ymin = conf.low, ymax = conf.high))
+} else {
+  p_exit_etwfe <- p_exit_etwfe + geom_line() + geom_point()
+}
+
+p_exit_etwfe
+
+# Reduce event by 0.1 for es8
+etwfe_exit_eu_me$event <- etwfe_exit_eu_me$event - 0.1
+
+```
+
+
+## 推定表の出力
+
+
+
+
+```{r Table-ETWFE-OLS, dpi = 300}
+
+library(kableExtra)
+longnote <- "Notes: Marginal effects from Wooldridge's (2021) extended two-way fixed effects (ETWFE) model are reported in the table. Standard errors are clustered at the country level and presented in parentheses. The data are affiliate-level balanced panel data from the OJC data. The estimation uses data from 2010 to 2020, which are already observed at two-year intervals; the 2014 year indicator is omitted as the reference period. To improve computational efficiency, the estimation employs group-level (i.e., country-level) fixed effects instead of unit-level (i.e., affiliate-level) fixed effects. This estimation strategy follows Wooldridge (2021), which demonstrates the equivalence of group- and unit-level fixed effects in linear models. The R package `etwfe` is used for implementation. * $p<0.05$, ** $p<0.01$, *** $p<0.001$."
+
+post_periods <- c(2016, 2018, 2020)
+post_period_labels <- as.character(post_periods)
+
+extract_etwfe_table <- function(model) {
+  coef_vec <- coef(model)
+  se_vec <- sqrt(diag(vcov(model)))
+  coef_names <- paste0(".Dtreat:first_year::2016:year::", post_periods)
+
+  tibble::tibble(
+    year = post_periods,
+    estimate = unname(coef_vec[coef_names]),
+    std_error = unname(se_vec[coef_names])
+  )
+}
+
+fmt_num <- function(x) sprintf("%.3f", x)
+fmt_se <- function(x) paste0("(", sprintf("%.3f", x), ")")
+
+tab_exit_high <- extract_etwfe_table(etwfe_exit_high_income_eu)
+tab_exit_eu   <- extract_etwfe_table(etwfe_exit_eu)
+
+row_labels <- c(rbind(
+  paste0("UK $\\times$ ", post_period_labels),
+  rep("", length(post_periods))
+))
+
+table_body <- tibble::tibble(
+  Term = row_labels,
+  `(1)` = c(rbind(fmt_num(tab_exit_high$estimate), fmt_se(tab_exit_high$std_error))),
+  `(2)` = c(rbind(fmt_num(tab_exit_eu$estimate), fmt_se(tab_exit_eu$std_error)))
+) %>%
+  add_row(
+    Term = "Num.Obs.",
+    `(1)` = as.character(nobs(etwfe_exit_high_income_eu)),
+    `(2)` = as.character(nobs(etwfe_exit_eu))
+  ) %>%
+  add_row(
+    Term = "Group Fixed-Effects",
+    `(1)` = "Yes", `(2)` = "Yes"
+  ) %>%
+  add_row(
+    Term = "Year Fixed-Effects",
+    `(1)` = "Yes", `(2)` = "Yes"
+  ) %>%
+  add_row(
+    Term = "R2",
+    `(1)` = fmt_num(as.numeric(fixest::fitstat(etwfe_exit_high_income_eu, "pr2"))),
+    `(2)` = fmt_num(as.numeric(fixest::fitstat(etwfe_exit_eu, "pr2")))
+  )
+
+# HTML
+tab2_html <- kbl(
+  table_body,
+  format = "html",
+  escape = FALSE,
+  caption = "Effect of the Brexit Referendum on Exit Probability (ETWFE, OLS)",
+  col.names = c("", "(1)", "(2)")
+) |>
+  add_header_above(c(" " = 1, "Exit probability" = 2)) |>
+  kable_styling(full_width = FALSE, position = "center")
+
+tab2_html
+
+# LaTeX
+tab2_latex <- kbl(
+  table_body,
+  format = "latex",
+  booktabs = TRUE,
+  escape = FALSE,
+  caption = "Effect of the Brexit Referendum on Exit Probability (ETWFE, OLS)",
+  label = "Table-ETWFE-OLS",
+  align = "lcc",
+  linesep = "",
+  col.names = c("", "(1)", "(2)")
+) |>
+  add_header_above(c(" " = 1, "Exit probability" = 2)) |>
+  kable_styling(latex_options = c("hold_position"))
+
+tab2_latex <- as.character(tab2_latex)
+tab2_latex <- gsub("\\\\begin\\{table\\}\\[!h\\]", "\\\\begin{table}[!ht]", tab2_latex)
+# Manually add the note after tabular to allow page-width wrapping
+note_latex <- paste0("\\\\end{tabular}\n\\\\begin{flushleft}\n\\\\footnotesize\n", longnote, "\n\\\\end{flushleft}")
+tab2_latex <- gsub("\\\\end\\{tabular\\}", note_latex, tab2_latex)
+writeLines(tab2_latex, "../../04_tex/main/Tab2.tex")
+
+```
+
+
+\newpage
+
+# All OECD countries
+
+```{r Fig-TWFE-Exit-OLS-OECD, dpi = 300}
+
+fixestWorldExitOLS <- fixest::feols(exitit ~   i(year, GBR, 2014)
+                       | year + AffiliateCode, 
+               data = aff_oecd,
+               vcov = ~ country)
+
+fixest::iplot(fixestWorldExitOLS, pt.join = TRUE,
+      main = "Effect of the Brexit referendum on exit probability",
+      sub = "Affiliate-level balanced panel.",
+      xlab = "Linear probability model. Two-year event-study bins. \
+      OECD countries excluding EU countries."
+      )
+```
+
+
+
+```{r ETWFE-Exit-OLS-OECD}
+
+etwfeWorldExitOLS <- etwfe::etwfe(exitit ~  1  ,
+               tvar = year, # time var
+               gvar = first_year, # group var
+               ivar =  year + AffiliateCode, # FEs
+               data = aff_oecd,
+               family = "gaussian",
+               vcov = ~country)
+etwfeWorldExitOLSME <- etwfe::emfx(etwfeWorldExitOLS, type = "event", vcov = FALSE) 
+
+fixest::etable(etwfeWorldExitOLS)
+
+```
+
+
+
+# References {-}
+
+- [Create a publication-ready LaTeX regression table with `kableExtra` in R](https://tilburgsciencehub.com/topics/visualization/reporting-tables/reportingtables/kableextra/)
+
+- [modelsummary: regression tables](https://modelsummary.com/articles/modelsummary.html)
+
+- `fixest`
+  - [fixest: Exporting estimation tables](https://lrberge.github.io/fixest/articles/exporting_tables.html#exporting-multiple-estimations-to-latex)
+  - [Fast Fixed-Effects Estimation: Short Introduction](https://cran.r-project.org/web/packages/fixest/vignettes/fixest_walkthrough.html)
+
+- For OLS:
+  - [Fixed-effects OLS estimations](https://lrberge.github.io/fixest/reference/feols.html)
+
+- For Logit model:
+  - [Fixed-effects GLM estimations](https://lrberge.github.io/fixest/reference/feglm.html)
+  - [family: Family Objects for Models](https://rdrr.io/r/stats/family.html)
+  - [LOGIT REGRESSION | R DATA ANALYSIS EXAMPLES](https://stats.oarc.ucla.edu/r/dae/logit-regression/)
+
+- [HonestDiD](https://github.com/asheshrambachan/HonestDiD)

@@ -1,0 +1,24 @@
+[Date: June 12, 2025]  
+The Editor
+European Economic Review
+
+Dear Editor,  
+We are pleased to submit our manuscript, titled “Anchored Abroad: Sunk Costs, Asset Specificity, and Japanese Affiliate Exit from Brexit Britain,” for consideration in the European Economic Review.  
+
+This study examines the impact of Brexit on foreign direct investment (FDI), focusing on the micro-level exit and divestment behavior of Japanese affiliates in the UK from 2010 to 2020. Using a comprehensive dataset from Toyo Keizai Inc.’s Overseas Japanese Companies Data, we employ state-of-the-art difference-in-differences (DiD) and synthetic DiD methodologies to compare Japanese affiliates in the UK with those in other EU countries. Our theoretical framework highlights the role of sunk costs in creating hysteresis effects, which asymmetrically influence FDI entry and exit decisions.  
+
+Our findings reveal that Brexit significantly reduced new Japanese FDI entries into the UK but had negligible effects on affiliate exits, except in industries with low asset specificity. These results challenge prevailing narratives about Brexit’s detrimental FDI effects and underscore the critical role of investment irreversibility in multinational location strategies. By providing novel micro-level evidence, our study addresses a significant gap in the Brexit literature, which has largely focused on aggregate outcomes.  
+
+We believe this manuscript is well-suited for the European Economic Review. The manuscript has not been published elsewhere, nor is it under consideration by another journal. Please note that our data was purchased from Toyo Keizai, and we are unable to share this data for replication. We do, however, share our scripts for replication purposes. 
+
+We appreciate your consideration and look forward to the opportunity to contribute to the European Economic Review. 
+
+
+Sincerely,  
+Michael Ryan
+Professor, Department of Economics
+Western Michigan University
+1903 W. Michigan Ave, Kalamazoo, MI 49008, USA
+Email: michael.ryan@wmich.edu
+ORCID: 0000-0001-9381-3112  
+

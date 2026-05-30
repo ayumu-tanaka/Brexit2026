@@ -1,0 +1,26 @@
+\begin{table}[!htbp]\centering\caption{\label{tab:EntrySector}The Brexit Referendum's Impact on New Affiliate Entry Count by Brexit MFN Risk Group: PPML Event Study and Pooled Poisson QMLE ATT}\begin{threeparttable}\begin{tabular}{l*{6}{c}}\toprule
+\multicolumn{1}{c}{} & \multicolumn{3}{c}{PPML Event Study} & \multicolumn{3}{c}{Pooled Poisson QMLE ATT} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+\multicolumn{1}{c}{} & \multicolumn{1}{c}{High MFN Risk} & \multicolumn{1}{c}{Low MFN Risk} & \multicolumn{1}{c}{Services} & \multicolumn{1}{c}{High MFN Risk} & \multicolumn{1}{c}{Low MFN Risk} & \multicolumn{1}{c}{Services} \\
+\multicolumn{1}{c}{} & \multicolumn{1}{c}{(1)} & \multicolumn{1}{c}{(2)} & \multicolumn{1}{c}{(3)} & \multicolumn{1}{c}{(4)} & \multicolumn{1}{c}{(5)} & \multicolumn{1}{c}{(6)} \\
+
+\midrule
+~~UK $\times$ Year 2010 [ES]&       0.288   &       0.541   &      -0.671***&               &               &               \\
+                    &     (0.886)   &     (0.356)   &     (0.123)   &               &               &               \\
+~~UK $\times$ Year 2012 [ES]&       0.811   &      -0.970** &      -0.025   &               &               &               \\
+                    &     (0.652)   &     (0.307)   &     (0.174)   &               &               &               \\
+~~UK $\times$ Year 2016 [ES]&       0.087   &      -0.565   &      -0.383   &               &               &               \\
+                    &     (0.719)   &     (0.320)   &     (0.213)   &               &               &               \\
+~~UK $\times$ Year 2018 [ES]&       0.847   &      -0.878***&      -0.131   &               &               &               \\
+                    &     (0.775)   &     (0.168)   &     (0.147)   &               &               &               \\
+~~UK $\times$ Year 2020 [ES]&      -0.651   &      -0.811** &      -0.899***&               &               &               \\
+                    &     (0.609)   &     (0.310)   &     (0.209)   &               &               &               \\
+~~UK $\times$ Year 2016 [ATT]&               &               &               &      -0.326   &      -0.019   &      -0.361   \\
+                    &               &               &               &     (0.506)   &     (0.535)   &     (0.336)   \\
+~~UK $\times$ Year 2018 [ATT]&               &               &               &      -0.127   &      -0.431   &      -0.073   \\
+                    &               &               &               &     (0.728)   &     (0.345)   &     (0.205)   \\
+~~UK $\times$ Year 2020 [ATT]&               &               &               &      -1.240*  &      -0.347   &      -0.742   \\
+                    &               &               &               &     (0.581)   &     (0.430)   &     (0.381)   \\
+\midrule
+Observations        &         336   &         528   &       2,004   &         191   &         241   &         887   \\
+\bottomrule\end{tabular}\begin{tablenotes}[flushleft]\footnotesize\item \textit{Notes:} The outcome is the biennial count of new Japanese affiliate entries in a host country by industry. The comparison group is restricted to EU high-income countries (AUT, BEL, DNK, FIN, FRA, DEU, IRL, ITA, LUX, NLD, SWE) with the UK as the treated unit. Columns (1)--(3) report PPML event-study coefficients from \texttt{ppmlhdfe} with year-sector fixed effects and a UK cohort dummy (GBR). The PPML reference year is 2014. Columns (4)--(6) report dynamic ATT estimates from \texttt{jwdid} following Wooldridge (2023). Standard errors clustered two-way by country-industry cell and industry are reported in parentheses. * p \(<\) 0.05, ** p \(<\) 0.01, *** p \(<\) 0.001. Rows labeled [ES] correspond to PPML event-study coefficients; rows labeled [ATT] correspond to pooled Poisson QMLE ATT estimates. \end{tablenotes}\end{threeparttable}\end{table}

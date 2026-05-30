@@ -1,0 +1,100 @@
+---
+title: "The World Bank's Doing Business Report"
+author: "Ayumu Tanaka"
+date: "2024-05-26"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # cache results
+                      message=FALSE, # show messages
+                      warning=FALSE) # show warnings
+
+```
+
+
+# The World Bank's Doing Business Report
+
+
+- The World Bank's Doing Business Report has published the ease of doing business rankings between 2004 and 2020.
+
+- The Doing Business measured business regulations for local firms in 190 economies.
+
+- However, the World Bank has decided to discontinue the Doing Business report, after data irregularities on Doing Business 2018 and 2020 were reported internally in June 2020.
+
+- The Doing Business's complete historical data up to Doing Business 2020, revised to correct data irregularities are available at the World Bank's website.
+  - [https://archive.doingbusiness.org/en/doingbusiness](https://archive.doingbusiness.org/en/doingbusiness)
+  -  [Historical-data.dta](https://archive.doingbusiness.org/content/dam/misc/doingbusiness/db2020/Historical-data.dta)
+
+
+# Load the data
+
+```{r}
+library(rio)
+DB<- import("../unused_data_raw/WB_Doing_Business/Historical-data.dta")
+```
+
+# Describe the data 
+
+```{r}
+library(gtsummary)
+library(dplyr)
+# Describe the data
+DB %>%
+  select(-cod) %>%
+  select(-economy) %>%
+  tbl_summary()
+
+```
+
+
+# Select the necessary columns 
+
+```{r}
+# Display the names of columns
+names(DB)
+# Keep cod year startbustime 
+DB <- DB[, c("cod", "dbyear", "startbustime", "taxestotal")]
+# Rename "dbyear" to "year"
+names(DB)[names(DB) == "dbyear"] <- "year"
+```
+
+# Write the data as CSV using `rio` package
+
+```{r}
+library(rio)
+export(DB, "../unused_output/DB.rds")
+```
+
+
+# Distribution of the observations
+
+```{r}
+library(ggplot2)
+
+# plot the distribution of the observations by year
+DB %>%
+  group_by(year) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = year, y = n)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Distribution of the observations by year",
+       x = "Year",
+       y = "Number of observations")
+```
+
+
+# Describe the data again
+
+```{r}
+library(gtsummary)
+DB %>%
+  select(-cod) %>%
+  tbl_summary()
+```
+

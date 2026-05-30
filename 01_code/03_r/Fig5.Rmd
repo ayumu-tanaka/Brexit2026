@@ -1,0 +1,490 @@
+---
+title: "多重代入による欠損補完の確認"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+  pdf_document:
+    toc: true
+    keep_tex: true
+---
+
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+# パッケージの読み込み
+
+```{r load-package}
+library(tidyverse)
+```
+
+
+# データの読み込み
+```{r data}
+
+aff_highEU <- rio::import("../../03_data_output/Affiliate/affiliate_panel_brexit_high_income_eu_sample.dta")
+
+
+# 2010年から2020年に限定
+aff_highEU <- aff_highEU %>% filter(year >= 2010 & year <= 2020)
+
+```
+
+
+
+# 欠損の状況を確認
+
+```{r check-missing}
+library(mice)
+# `Aff_size` と `N_Aff_EU` の欠損を確認
+mice::md.pattern(aff_highEU[, c("AffiliateCode", "year", 
+                                "exitit", "Aff_size", "Aff_size_raw")])
+
+
+```
+
+
+# 予測行列の設定
+
+```{r}
+
+# 必要な変数だけ残す
+aff_highEU <- aff_highEU %>%
+  select(AffiliateCode, year, exitit, Aff_size, Aff_size_raw, 
+         GBR, Brexit, country, first_year,
+         ParentJPNumber, Ratio, N_Aff_EU, survival_years)
+```
+
+
+```{r predictor-matrix}
+# 予測行列を初期化
+data <- aff_highEU
+init <- mice(data, maxit=0)
+pred <- init$predictorMatrix
+
+# `Aff_size_raw` の予測行列
+# 1: use、0: not-use
+pred["Aff_size_raw", ] <- 0  # Initialize all to 0
+pred["Aff_size_raw", c("ParentJPNumber", "Ratio", "N_Aff_EU","survival_years")] <- 1
+
+
+# 補完に使わない変数を除外
+pred[, c("AffiliateCode", "year", 
+         "exitit", 
+         "country", "Aff_size",  "GBR", 
+         "Brexit", "first_year")] <- 0
+
+```
+
+
+# 補完方法の設定
+
+```{r imputation-methods}
+# 補完方法を初期化
+meth <- init$method
+# 基本は補完しない設定にする
+meth <- gsub("pmm", "", meth) 
+# `Aff_size_raw` には PMM を使う
+meth["Aff_size_raw"] <- "pmm"  # continuous variables
+
+```
+
+
+# 多重代入
+
+```{r multiple-imputation, include=FALSE}
+# 多重代入の実行
+imp <- mice::mice(data, m=5, 
+                  method=meth, 
+                  predictorMatrix=pred, 
+                  maxit=50, 
+                  seed=500)
+# 補完結果の確認
+summary(imp) 
+```
+
+
+# 補完済みデータの保存
+```{r save-imputed-data}
+complete_data <- complete(imp, action="long") 
+complete1 <- complete(imp, 1)
+complete2 <- complete(imp, 2)
+complete3 <- complete(imp, 3)
+complete4 <- complete(imp, 4)
+complete5 <- complete(imp, 5)
+
+
+```
+
+
+# 補完後データの分布
+
+```{r distributions}
+stripplot(imp, Aff_size_raw ~ .imp, 
+          main = "Strip plot of imputed data")
+
+```
+
+
+
+# 密度プロット
+```{r density}
+densityplot(imp, ~ Aff_size_raw, 
+            main = "Density plot of imputed data")
+
+# X range: 0 to 5000
+# Y range: 0 to 0.005
+densityplot(imp, ~ Aff_size_raw, 
+            main = "Density plot of imputed data",
+            xlim = c(0, 5000), ylim = c(0, 0.005))
+
+```
+
+
+# 収束プロット
+```{r convergence}
+# 収束プロットの表示
+plot(imp)
+```
+
+# 補完結果を比較
+
+```{r ETWFE-Exit-OLS-HighEU-Imputed, dpi = 300}
+
+# パッケージの読み込み
+library(etwfe)
+library(fixest)
+library(dplyr)
+
+# 欠損を除外
+complete1 <- complete1 %>% filter(!is.na(Aff_size_raw))
+complete2 <- complete2 %>% filter(!is.na(Aff_size_raw))
+complete3 <- complete3 %>% filter(!is.na(Aff_size_raw))
+complete4 <- complete4 %>% filter(!is.na(Aff_size_raw))
+complete5 <- complete5 %>% filter(!is.na(Aff_size_raw))
+
+
+# 補完データの一覧
+complete_list <- list(complete1, complete2, complete3, complete4, complete5)
+```
+
+
+# 動学効果の係数を計算
+
+- Function `etwfe()` is used to estimate the event-time weighted fixed effects model.
+- Here we use the event-study coefficients and their clustered standard errors directly from the fitted model.
+- `function(data_i)` is used to loop through the imputed data. 
+  - `i` is the index of the imputed data.
+- `lapply()` is used to apply the function to each element of the list `complete_list`.
+
+```{r marginal-effects}
+extract_event_results <- function(fit) {
+  coef_vec <- coef(fit)
+  se_vec <- sqrt(diag(vcov(fit)))
+  event_terms <- grep("^\\.Dtreat:first_year::2016:year::20(16|18|20)$",
+                      names(coef_vec),
+                      value = TRUE)
+
+  results <- data.frame(
+    term = event_terms,
+    year = as.integer(sub(".*year::", "", event_terms)),
+    estimate = unname(coef_vec[event_terms]),
+    std.error = unname(se_vec[event_terms])
+  )
+
+  results$conf.low <- results$estimate - 1.96 * results$std.error
+  results$conf.high <- results$estimate + 1.96 * results$std.error
+  results
+}
+
+fit_list <- lapply(complete_list, function(data_i) {
+  # etwfe: event-time weighted fixed effects
+  etwfe(
+    exitit ~ Aff_size_raw + N_Aff_EU,
+    tvar = year,
+    gvar = first_year,
+    ivar = year + AffiliateCode,
+    data = data_i, # imputed data i = 1, 2, 3, 4, 5
+    family = "gaussian",
+    vcov = ~country
+  )
+})
+
+mi_n <- mean(vapply(fit_list, nobs, numeric(1)))
+mi_pr2 <- mean(vapply(fit_list, function(x) as.numeric(fixest::fitstat(x, "pr2")), numeric(1)))
+
+me_estimates <- lapply(fit_list, extract_event_results)
+```
+
+
+ 
+
+```{r pool-marginal-effects}
+
+# ----- ステップ1: 個別データセットの推定値と標準誤差を保存 -----
+
+# 個別データセットの結果を格納するデータフレームを初期化
+dataset_results <- data.frame()
+
+# データセット1の結果を追加
+dataset1_results <- data.frame(
+  term = me_estimates[[1]]$term,
+  estimate_1 = me_estimates[[1]]$estimate,
+  std.error_1 = me_estimates[[1]]$std.error
+)
+dataset_results <- dataset1_results
+
+# データセット2の結果を追加
+dataset_results$estimate_2 <- me_estimates[[2]]$estimate
+dataset_results$std.error_2 <- me_estimates[[2]]$std.error
+
+# データセット3の結果を追加
+dataset_results$estimate_3 <- me_estimates[[3]]$estimate
+dataset_results$std.error_3 <- me_estimates[[3]]$std.error
+
+# データセット4の結果を追加
+dataset_results$estimate_4 <- me_estimates[[4]]$estimate
+dataset_results$std.error_4 <- me_estimates[[4]]$std.error
+
+# データセット5の結果を追加
+dataset_results$estimate_5 <- me_estimates[[5]]$estimate
+dataset_results$std.error_5 <- me_estimates[[5]]$std.error
+
+# 結果を保存
+output_dir <- "../../03_data_output"
+if(!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+write.csv(dataset_results, file.path(output_dir, "individual_dataset_results.csv"), row.names = FALSE)
+
+# ----- ステップ2: 保存したCSVを読み込み、Rubinのルールに基づいて統合 -----
+
+# CSVを読み込む
+individual_results <- read.csv(file.path(output_dir, "individual_dataset_results.csv"))
+
+# 統合結果を格納するデータフレームを初期化
+pooled_results <- data.frame(term = individual_results$term)
+
+# データセット数
+m <- 5
+
+# 各termに対して統合された推定値を計算
+# 推定値の平均を計算
+pooled_results$estimate <- (individual_results$estimate_1 + 
+                            individual_results$estimate_2 + 
+                            individual_results$estimate_3 + 
+                            individual_results$estimate_4 + 
+                            individual_results$estimate_5) / m
+
+# データセット内分散の計算
+# 現在の marginaleffects では、固定効果つき etwfe で標準誤差が返らないことがある。
+# その場合は、データセット内分散を 0 として点推定の比較を優先する。
+if (all(is.na(individual_results$std.error_1),
+        is.na(individual_results$std.error_2),
+        is.na(individual_results$std.error_3),
+        is.na(individual_results$std.error_4),
+        is.na(individual_results$std.error_5))) {
+  within_var <- rep(0, nrow(individual_results))
+} else {
+  within_var <- (individual_results$std.error_1^2 + 
+                 individual_results$std.error_2^2 + 
+                 individual_results$std.error_3^2 + 
+                 individual_results$std.error_4^2 + 
+                 individual_results$std.error_5^2) / m
+}
+
+# データセット間分散の計算
+between_var_sum <- (individual_results$estimate_1 - pooled_results$estimate)^2 + 
+                   (individual_results$estimate_2 - pooled_results$estimate)^2 + 
+                   (individual_results$estimate_3 - pooled_results$estimate)^2 + 
+                   (individual_results$estimate_4 - pooled_results$estimate)^2 + 
+                   (individual_results$estimate_5 - pooled_results$estimate)^2
+between_var <- between_var_sum / (m - 1)
+
+# 全体の分散（Rubinのルール）
+total_var <- within_var + between_var + between_var/m
+
+# 標準誤差の計算
+pooled_results$std.error <- sqrt(total_var)
+
+# 自由度の計算
+pooled_results$df <- (m - 1) * (1 + (m * within_var) / ((m + 1) * between_var))^2
+pooled_results$df[!is.finite(pooled_results$df)] <- NA_real_
+
+# t統計量の計算
+pooled_results$t_stat <- pooled_results$estimate / pooled_results$std.error
+
+# p値の計算
+pooled_results$p_value <- 2 * pt(-abs(pooled_results$t_stat), pooled_results$df)
+
+# 信頼区間の計算
+pooled_results$conf.low <- pooled_results$estimate - qt(0.975, pooled_results$df) * pooled_results$std.error
+pooled_results$conf.high <- pooled_results$estimate + qt(0.975, pooled_results$df) * pooled_results$std.error
+
+
+# 中間データを削除
+pooled_results$df <- NULL
+
+# 年変数を付与
+pooled_results$year <- as.integer(sub(".*year::", "", pooled_results$term))
+
+# 最終結果を表示
+print(pooled_results)
+
+# 統合結果をCSVに保存
+write.csv(pooled_results, file.path(output_dir, "pooled_marginal_effects.csv"), row.names = FALSE)
+
+# 保存が完了したことを表示
+cat("The integrated data based on Rubin's rule", file.path(output_dir, "pooled_marginal_effects.csv"), "was saved.\n")
+
+```
+
+
+# 平均値補完・完全ケースとの比較
+
+- Compare the multiple-imputation results with mean imputation and complete-case analysis.
+
+
+```{r ETWFE-Exit-OLS-HighEU, dpi = 300}
+# データの読み込み
+aff_highEU <- rio::import("../../03_data_output/Affiliate/affiliate_panel_brexit_high_income_eu_sample.dta")
+
+# 2010年から2020年に限定
+aff_highEU <- aff_highEU %>% filter(year >= 2010 & year <= 2020)
+
+# 平均値補完: country-year 平均で `Aff_size_raw` の欠損を補完
+overall_aff_size_mean <- mean(aff_highEU$Aff_size_raw, na.rm = TRUE)
+aff_highEU_mean <- aff_highEU %>%
+  group_by(country, year) %>%
+  mutate(
+    aff_size_country_year_mean = mean(Aff_size_raw, na.rm = TRUE),
+    aff_size_country_year_mean = ifelse(
+      is.nan(aff_size_country_year_mean),
+      overall_aff_size_mean,
+      aff_size_country_year_mean
+    ),
+    Aff_size_raw_mean = ifelse(
+      is.na(Aff_size_raw),
+      aff_size_country_year_mean,
+      Aff_size_raw
+    )
+  ) %>%
+  ungroup()
+
+cat("Running event-time weighted fixed effects model with mean-imputed data...\n")
+
+# 平均値補完データで ETWFE を推定
+mean_imputed_fit <- etwfe(
+  exitit ~ Aff_size_raw_mean + N_Aff_EU,
+  tvar = year,
+  gvar = first_year,
+  ivar = year + AffiliateCode,
+  data = aff_highEU_mean,
+  family = "gaussian",
+  vcov = ~country
+)
+
+# 平均値補完データの結果
+mean_imputed_results <- extract_event_results(mean_imputed_fit)
+mean_imputed_results$t_stat <- mean_imputed_results$estimate / mean_imputed_results$std.error
+mean_imputed_results$p_value <- 2 * pnorm(-abs(mean_imputed_results$t_stat))
+mean_imputed_n <- as.numeric(nobs(mean_imputed_fit))
+mean_imputed_pr2 <- as.numeric(fixest::fitstat(mean_imputed_fit, "pr2"))
+
+# 完全ケースでは `Aff_size_raw` の欠損を除外
+aff_highEU_clean <- aff_highEU %>% filter(!is.na(Aff_size_raw))
+
+cat("Running event-time weighted fixed effects model with complete-case data...\n")
+
+# 完全ケースデータで ETWFE を推定
+complete_case_fit <- etwfe(
+  exitit ~ Aff_size_raw + N_Aff_EU,
+  tvar = year,
+  gvar = first_year,
+  ivar = year + AffiliateCode,
+  data = aff_highEU_clean,
+  family = "gaussian",
+  vcov = ~country
+)
+
+# 結果データフレームを作成
+complete_case_results <- extract_event_results(complete_case_fit)
+complete_case_results$t_stat <- complete_case_results$estimate / complete_case_results$std.error
+complete_case_results$p_value <- 2 * pnorm(-abs(complete_case_results$t_stat))
+complete_case_n <- as.numeric(nobs(complete_case_fit))
+complete_case_pr2 <- as.numeric(fixest::fitstat(complete_case_fit, "pr2"))
+
+```
+
+# 比較図を作成
+
+
+```{r combined-plot, dpi = 300}
+# 出所識別用の列を追加
+pooled_results$source <- "Multiple Imputation"
+mean_imputed_results$source <- "Imputation with Mean"
+complete_case_results$source <- "Complete-case"
+
+# 3つの結果を結合
+combined_results <- rbind(pooled_results, mean_imputed_results, complete_case_results)
+
+# 比較図を描画
+p_combined <- ggplot(combined_results, aes(x = year, y = estimate, color = source, shape = source, linetype = source)) +
+  # Lines for both data sources
+  geom_line(position = position_dodge(width = 0.3)) +
+  # Points for both data sources
+  geom_point(size = 3, position = position_dodge(width = 0.3)) +
+  # Zero effect line
+  geom_hline(yintercept = 0, linetype = "dashed", color = "darkgray") +
+  # Labels
+  labs(
+    x = paste0(
+      "Years post treatment (two-year bins)\n",
+      "Multiple Imputation: N = ", sprintf("%.0f", mi_n),
+      ", Pseudo R-squared = ", sprintf("%.3f", mi_pr2), "\n",
+      "Imputation with Mean: N = ", mean_imputed_n,
+      ", Pseudo R-squared = ", sprintf("%.3f", mean_imputed_pr2), "\n",
+      "Complete-case: N = ", complete_case_n,
+      ", Pseudo R-squared = ", sprintf("%.3f", complete_case_pr2)
+    ),
+    y = "Effect of Brexit",
+    title = "The impacts on the exit probability: multiple imputation, mean imputation, and complete-case analysis",
+    color = "Data Source",
+    shape = "Data Source",
+    linetype = "Data Source"
+  ) +
+  # Theme customization
+  theme_minimal() +
+  # Color and linetype customization
+  scale_color_manual(values = c("Multiple Imputation" = "blue", "Imputation with Mean" = "red", "Complete-case" = "darkgreen")) +
+  scale_linetype_manual(values = c("Multiple Imputation" = "dotted", "Imputation with Mean" = "solid", "Complete-case" = "dotdash")) +
+  # X-axis breaks
+  scale_x_continuous(breaks = unique(combined_results$year))
+
+if (all(c("conf.low", "conf.high") %in% names(combined_results)) &&
+    any(stats::complete.cases(combined_results[, c("conf.low", "conf.high")]))) {
+  p_combined <- p_combined +
+    geom_errorbar(
+      aes(ymin = conf.low, ymax = conf.high),
+      width = 0.2,
+      position = position_dodge(width = 0.3)
+    )
+}
+
+# 比較図を表示
+print(p_combined)
+
+# 比較図をEPS形式で保存
+library(Cairo)  
+ggsave("../../04_tex/main/Fig5.eps", p_combined, device = cairo_ps, width = 10, height = 6, dpi = 300)
+
+```

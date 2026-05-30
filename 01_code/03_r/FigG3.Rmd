@@ -1,0 +1,344 @@
+---
+title: "Appendix G. Affiliate-Level Exit Responses by the Number of UK Affiliates within Parent Firms"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+# Purpose
+
+This temporary note examines whether affiliate-level exit responses to the
+Brexit referendum differed between affiliates whose parent firms had only one
+UK affiliate in 2010 and affiliates whose parent firms had two or more UK
+affiliates in 2010.
+
+The key idea is that parent firms with multiple UK affiliates may have more
+scope to reorganize within the UK after the referendum, for example by closing
+one affiliate while keeping other UK affiliates in place.
+
+# Caveat
+
+This is a reduced-form heterogeneity exercise at the affiliate level. It does
+not directly observe whether resources from a closed affiliate were actually
+reallocated to other surviving UK affiliates within the same parent firm.
+
+```{r packages}
+library(rio)
+library(dplyr)
+library(tidyr)
+library(fixest)
+library(knitr)
+library(ggplot2)
+```
+
+# Parent-level UK affiliate counts in 2010
+
+```{r parent-uk-count}
+# 親子関係を含む affiliate-level パネルデータを読み込む
+parent_panel <- import("../../03_data_output/Affiliate/affiliate_panel_with_parent_links.dta") %>%
+  filter(year == 2010)
+
+# 2010 年時点での親企業ごとの UK affiliate 数を作る
+parent_uk_count_2010 <- parent_panel %>%
+  group_by(JPCode) %>%
+  summarise(
+    total_affiliates_2010 = n_distinct(AffiliateCode),
+    uk_affiliates_2010 = n_distinct(AffiliateCode[iso == "GBR"]),
+    any_uk_presence_2010 = uk_affiliates_2010 > 0,
+    uk_multi_affiliate_group = case_when(
+      uk_affiliates_2010 == 0 ~ "No UK affiliates",
+      uk_affiliates_2010 == 1 ~ "One UK affiliate",
+      uk_affiliates_2010 >= 2 ~ "Two or more UK affiliates",
+      TRUE ~ NA_character_
+    ),
+    .groups = "drop"
+  )
+
+parent_uk_count_2010
+```
+
+# Baseline exit sample
+
+```{r exit-sample}
+# baseline の high-income EU exit sample を読み込む
+exit_sample <- import("../../03_data_output/Affiliate/affiliate_panel_brexit_high_income_eu_sample.dta") %>%
+  filter(year >= 2010, year <= 2020) %>%
+  left_join(parent_uk_count_2010, by = "JPCode")
+
+# exit sample の affiliate 数・親企業数などを確認する
+exit_sample %>%
+  summarise(
+    affiliates = n_distinct(AffiliateCode),
+    parents = n_distinct(JPCode),
+    parents_with_uk_presence = n_distinct(JPCode[any_uk_presence_2010]),
+    parents_with_multiple_uk_affiliates = n_distinct(JPCode[uk_affiliates_2010 >= 2])
+  )
+```
+
+# Sample composition
+
+```{r sample-composition}
+sample_composition <- exit_sample %>%
+  group_by(uk_multi_affiliate_group) %>%
+  summarise(
+    parents = n_distinct(JPCode),
+    affiliates = n_distinct(AffiliateCode),
+    observations = n(),
+    .groups = "drop"
+  )
+
+sample_composition %>%
+  kable(caption = "Composition of the baseline exit sample by the number of UK affiliates within each parent firm")
+```
+
+# Summary for the paper
+
+```{r paper-summary-values, include=FALSE}
+one_parents <- sample_composition %>%
+  filter(uk_multi_affiliate_group == "One UK affiliate") %>%
+  pull(parents)
+
+one_affiliates <- sample_composition %>%
+  filter(uk_multi_affiliate_group == "One UK affiliate") %>%
+  pull(affiliates)
+
+one_observations <- sample_composition %>%
+  filter(uk_multi_affiliate_group == "One UK affiliate") %>%
+  pull(observations)
+
+multi_parents <- sample_composition %>%
+  filter(uk_multi_affiliate_group == "Two or more UK affiliates") %>%
+  pull(parents)
+
+multi_affiliates <- sample_composition %>%
+  filter(uk_multi_affiliate_group == "Two or more UK affiliates") %>%
+  pull(affiliates)
+
+multi_observations <- sample_composition %>%
+  filter(uk_multi_affiliate_group == "Two or more UK affiliates") %>%
+  pull(observations)
+
+no_uk_parents <- sample_composition %>%
+  filter(uk_multi_affiliate_group == "No UK affiliates") %>%
+  pull(parents)
+
+no_uk_affiliates <- sample_composition %>%
+  filter(uk_multi_affiliate_group == "No UK affiliates") %>%
+  pull(affiliates)
+
+no_uk_observations <- sample_composition %>%
+  filter(uk_multi_affiliate_group == "No UK affiliates") %>%
+  pull(observations)
+
+parents_with_multiple_uk_affiliates <- exit_sample %>%
+  summarise(value = n_distinct(JPCode[uk_affiliates_2010 >= 2])) %>%
+  pull(value)
+
+parents_with_any_uk_presence <- exit_sample %>%
+  summarise(value = n_distinct(JPCode[any_uk_presence_2010])) %>%
+  pull(value)
+```
+
+In the baseline exit sample, `r parents_with_any_uk_presence` parent firms have
+at least one UK affiliate in 2010. Among them, `r parents_with_multiple_uk_affiliates`
+parent firms have two or more UK affiliates. The group of parents with one UK
+affiliate contains `r one_parents` parent firms, `r one_affiliates` affiliates,
+and `r one_observations` affiliate-year observations. The group of parents with
+two or more UK affiliates contains `r multi_parents` parent firms,
+`r multi_affiliates` affiliates, and `r multi_observations` affiliate-year
+observations. For comparison, the group of parents with no UK affiliates
+contains `r no_uk_parents` parent firms, `r no_uk_affiliates` affiliates, and
+`r no_uk_observations` affiliate-year observations.
+
+# Distribution of UK affiliate counts
+
+```{r distribution}
+parent_uk_count_dist <- exit_sample %>%
+  distinct(JPCode, uk_affiliates_2010, uk_multi_affiliate_group)
+
+ggplot(
+  parent_uk_count_dist %>% filter(uk_affiliates_2010 > 0),
+  aes(x = uk_affiliates_2010)
+) +
+  geom_histogram(binwidth = 1, boundary = 0.5, fill = "#6baed6", color = "white") +
+  scale_x_continuous(breaks = seq(1, max(parent_uk_count_dist$uk_affiliates_2010, na.rm = TRUE), by = 1)) +
+  labs(
+    x = "Number of UK affiliates in 2010",
+    y = "Number of parent firms",
+    title = "Distribution of parent-level UK affiliate counts in 2010",
+    subtitle = "Histogram restricted to parent firms with at least one UK affiliate"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+# Event-study estimates by the number of UK affiliates
+
+```{r event-study}
+event_groups <- c("One UK affiliate", "Two or more UK affiliates")
+
+event_parent_counts <- sample_composition %>%
+  filter(uk_multi_affiliate_group %in% event_groups) %>%
+  mutate(uk_multi_affiliate_group = factor(uk_multi_affiliate_group, levels = event_groups)) %>%
+  arrange(uk_multi_affiliate_group)
+
+event_samples <- split(
+  exit_sample %>% filter(uk_multi_affiliate_group %in% event_groups),
+  factor(
+    exit_sample %>% filter(uk_multi_affiliate_group %in% event_groups) %>% pull(uk_multi_affiliate_group),
+    levels = event_groups
+  )
+)
+
+event_models <- lapply(
+  event_samples,
+  function(df) {
+    feols(
+      exitit ~ i(year, GBR, 2014) | year + AffiliateCode,
+      data = df,
+      vcov = ~country
+    )
+  }
+)
+
+extract_event_years <- function(model) {
+  coef_names <- names(coef(model))
+  as.numeric(sub(".*year::([0-9]{4}):GBR.*", "\\1", coef_names))
+}
+
+joint_test_pvalue <- function(model, years) {
+  coef_names <- names(coef(model))
+  test_terms <- coef_names[extract_event_years(model) %in% years]
+
+  if (length(test_terms) == 0) {
+    return(NA_real_)
+  }
+
+  b <- coef(model)[test_terms]
+  V <- vcov(model)[test_terms, test_terms, drop = FALSE]
+  V_inv_b <- tryCatch(
+    solve(V, b),
+    error = function(e) qr.solve(V, b)
+  )
+  wald_stat <- as.numeric(t(b) %*% V_inv_b)
+  1 - pchisq(wald_stat, df = length(test_terms))
+}
+
+event_fit_stats <- tibble(
+  uk_multi_affiliate_group = factor(names(event_models), levels = event_groups),
+  N = sapply(event_models, nobs),
+  pretrend_p = sapply(event_models, joint_test_pvalue, years = c(2010, 2012)),
+  post_p = sapply(event_models, joint_test_pvalue, years = c(2016, 2018, 2020))
+) %>%
+  left_join(event_parent_counts, by = "uk_multi_affiliate_group") %>%
+  arrange(uk_multi_affiliate_group)
+
+etable(
+  event_models,
+  keep = "%year::2010:GBR|year::2012:GBR|year::2016:GBR|year::2018:GBR|year::2020:GBR",
+  fitstat = ~ n + wr2,
+  tex = FALSE
+)
+
+event_test_results <- event_fit_stats %>%
+  transmute(
+    `Group` = as.character(uk_multi_affiliate_group),
+    `Pre-trend test p-value` = round(pretrend_p, 3),
+    `Post-treatment joint test p-value` = round(post_p, 3)
+  )
+
+kable(
+  event_test_results,
+  caption = "Joint tests for pre-trends and post-treatment effects by the number of UK affiliates within each parent firm"
+)
+```
+
+# Event-study plot
+
+```{r event-study-plot}
+legend_labels <- as.character(event_fit_stats$uk_multi_affiliate_group)
+
+note_line_one <- sprintf(
+  "One UK affiliate: N = %s, Parent firms = %s, Affiliates = %s, Observations = %s.",
+  event_fit_stats$N[event_fit_stats$uk_multi_affiliate_group == "One UK affiliate"],
+  event_fit_stats$parents[event_fit_stats$uk_multi_affiliate_group == "One UK affiliate"],
+  event_fit_stats$affiliates[event_fit_stats$uk_multi_affiliate_group == "One UK affiliate"],
+  event_fit_stats$observations[event_fit_stats$uk_multi_affiliate_group == "One UK affiliate"]
+)
+
+note_line_multi <- sprintf(
+  "Two or more UK affiliates: N = %s, Parent firms = %s, Affiliates = %s, Observations = %s.",
+  event_fit_stats$N[event_fit_stats$uk_multi_affiliate_group == "Two or more UK affiliates"],
+  event_fit_stats$parents[event_fit_stats$uk_multi_affiliate_group == "Two or more UK affiliates"],
+  event_fit_stats$affiliates[event_fit_stats$uk_multi_affiliate_group == "Two or more UK affiliates"],
+  event_fit_stats$observations[event_fit_stats$uk_multi_affiliate_group == "Two or more UK affiliates"]
+)
+
+plot_event_study <- function() {
+  do.call(
+    iplot,
+    c(
+      event_models,
+      list(
+        pt.join = TRUE,
+        sep = 0.5,
+        ref.line = 0,
+        xlab = "Year (two-year intervals)",
+        ylab = "Estimated effect on exit probability",
+        main = "Affiliate-Level Exit Responses by the Number of UK Affiliates within Parent Firms",
+        ci_level = 0.95,
+        col = c("#1b9e77", "#d95f02"),
+        pt.col = c("#1b9e77", "#d95f02")
+      )
+    )
+  )
+
+  legend(
+    "topright",
+    legend = legend_labels,
+    col = c("#1b9e77", "#d95f02"),
+    pch = 19,
+    lty = 1:2,
+    lwd = 1,
+    bty = "n",
+    title = "Parent UK-affiliate group"
+  )
+}
+
+plot_event_study()
+
+postscript(
+  "../../04_tex/main/FigG3.eps",
+  horizontal = FALSE,
+  width = 8,
+  height = 6
+)
+plot_event_study()
+dev.off()
+```
+
+```{r event-study-note, results='asis'}
+cat(
+  paste0(
+    "**Figure note.** ",
+    note_line_one,
+    "<br>",
+    note_line_multi
+  )
+)
+```
+
+# Interpretation
+
+This note is intended as a feasibility check. If affiliates belonging to parent
+firms with multiple UK affiliates show a larger exit response, one possible
+interpretation is that parent firms may have had more scope to reorganize
+within the UK while preserving some UK presence.

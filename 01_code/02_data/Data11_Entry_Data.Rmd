@@ -1,0 +1,192 @@
+---
+title: "新規参入データの作成"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+# 新規参入の定義
+
+- データに初めて現れる年を参入年として扱う。
+- 現地法人レベルでは、現地法人が初めて現れる年を参入年とする。
+- 親会社レベルでは、親会社が当該国に初めて現れる年を参入年とする。
+- データは1990年から2022年までの隔年パネルである。
+- 1990年はデータの始点であり、それ以前から存在していた個体と1990年に参入した個体を識別できないため、1990年を参入年として扱わない。
+- 結果として、1992年から2022年までの参入件数を格納したデータセットを作成する。
+
+旧バージョン（`affiliate_panel_survival_ready.dta`）との違い：
+
+- 入力データを `shareholder_panel_iso_sector.dta` に変更。
+- 旧バージョンでは最大出資比率の親会社（rank==1）のみを使用していたが、本バージョンでは全親会社（rank>=2 を含む）を使用する。
+- **現地法人レベル**の参入件数は変わらないが、**親会社レベル**の参入件数は rank>=2 の親会社が加わることで増加する。
+
+
+# パッケージの読み込み
+
+```{r load-package}
+library(dplyr)
+library(rio)
+library(data.table)
+```
+
+# データの読み込み
+
+## 入力データ
+
+- `../../03_data_output/ShareHolder/shareholder_panel_iso_sector.dta`
+
+## 出力データ
+
+- `../../03_data_output/EntryExit/N_affiliate_entry_country_industry_year.dta`
+- `../../03_data_output/EntryExit/N_affiliate_entry_country_year.dta`
+- `../../03_data_output/EntryExit/N_parent_entry_country_industry_year.dta`
+- `../../03_data_output/EntryExit/N_parent_entry_country_year.dta`
+
+```{r load-data}
+shjp <- rio::import("../../03_data_output/ShareHolder/shareholder_panel_iso_sector.dta")
+```
+
+- 年次の分布を確認
+
+```{r check-years}
+table(shjp$year)
+```
+
+# 変数の整理
+
+`JOwnRatio` を `Ratio` にリネームし、変数名を後続処理と統一する。
+
+```{r rename-vars}
+shjp <- shjp %>%
+  mutate(Ratio = JOwnRatio / 100) %>%
+  select(-JOwnRatio)
+```
+
+
+# 現地法人レベルの参入年データ作成
+
+## 現地法人レベルへの集約
+
+1つの現地法人に複数の親会社（rank>=2）が存在するため、
+現地法人の代表値として rank==1 の行を使用してから参入年を特定する。
+
+```{r dedup-affiliate}
+aff <- shjp %>%
+  group_by(AffiliateCode, year) %>%
+  filter(rank == min(rank)) %>%
+  slice(1) %>%
+  ungroup()
+```
+
+## 初出年の抽出
+
+```{r keep-first-year}
+aff_first <- aff %>%
+  group_by(AffiliateCode) %>%
+  filter(year == min(year)) %>%
+  ungroup() %>%
+  filter(year > 1990)
+```
+
+## 産業×国×参入年への集計
+
+```{r collapse-data-tidyverse-sector}
+collapseIndustry <- aff_first %>%
+  group_by(year, iso, FA_SectorCode2009) %>%
+  summarise(N         = n(),
+            meanratio = mean(Ratio, na.rm = TRUE),
+            WN        = sum(Ratio, na.rm = TRUE),
+            .groups = "drop")
+
+rio::export(collapseIndustry, "../../03_data_output/EntryExit/N_affiliate_entry_country_industry_year.dta")
+```
+
+## 国×参入年への集計
+
+```{r collapse-data-tidyverse}
+collapse <- aff_first %>%
+  group_by(year, iso) %>%
+  summarise(N         = n(),
+            meanratio = mean(Ratio, na.rm = TRUE),
+            WN        = sum(Ratio, na.rm = TRUE),
+            .groups = "drop")
+
+rio::export(collapse, "../../03_data_output/EntryExit/N_affiliate_entry_country_year.dta")
+```
+
+
+# 親会社レベルの参入年データ作成
+
+rank>=2 を含む全親会社を使用するため、rank==1 のみを使用した旧バージョンよりも
+参入件数が増加する。
+
+## 親会社×国×年パネルの作成
+
+```{r create-parent-country-year-panel}
+parent <- as.data.table(shjp)[
+  ,
+  .(
+    N_Aff                      = .N,
+    Ratio                      = mean(Ratio, na.rm = TRUE),
+    Parent_SectorCode          = Parent_SectorCode2009[1L],
+    Parent_SectorName          = Parent_SectorNameAlph[1L],
+    Parent_SectorClass         = Parent_SectorClass[1L],
+    Parent_SectorClassNameAlph = Parent_SectorClassNameAlph[1L],
+    countryname                = countryname[1L]
+  ),
+  by = .(JPCode, iso, year)
+] %>%
+  as_tibble()
+```
+
+## 初出年の抽出
+
+```{r keep-first-year-parent}
+parent_first <- parent %>%
+  group_by(JPCode, iso) %>%
+  filter(year == min(year)) %>%
+  ungroup() %>%
+  filter(year > 1990)
+```
+
+## 産業×国×参入年への集計
+
+```{r collapse-parent-data-sector}
+parent_collapse_industry <- parent_first %>%
+  group_by(year, iso, Parent_SectorCode) %>%
+  summarise(
+    N         = n(),
+    meanratio = mean(Ratio, na.rm = TRUE),
+    WN        = sum(Ratio, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+rio::export(parent_collapse_industry, "../../03_data_output/EntryExit/N_parent_entry_country_industry_year.dta")
+```
+
+## 国×参入年への集計
+
+```{r collapse-parent-data}
+parent_collapse <- parent_first %>%
+  group_by(year, iso) %>%
+  summarise(
+    N         = n(),
+    meanratio = mean(Ratio, na.rm = TRUE),
+    WN        = sum(Ratio, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+rio::export(parent_collapse, "../../03_data_output/EntryExit/N_parent_entry_country_year.dta")
+```

@@ -1,0 +1,302 @@
+---
+title: "退出に関する pooled logit QMLE DiD 推定図"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+  pdf_document:
+    toc: true
+    keep_tex: true
+#    fig_caption: yes
+---
+
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+# パッケージの読み込み
+```{r package}
+library(tidyverse)
+library(fixest)
+library(etwfe)
+library(modelsummary)
+```
+
+
+# データの読み込み
+```{r data}
+aff_eu <- rio::import("../../03_data_output/Affiliate/affiliate_panel_brexit_eu_sample.dta")
+
+aff_highEU <- rio::import("../../03_data_output/Affiliate/affiliate_panel_brexit_high_income_eu_sample.dta")
+
+
+
+# Restrict years between 2010 and 2020
+aff_eu <- aff_eu %>%             filter(year >= 2010 & year <= 2020)
+aff_highEU <- aff_highEU %>%     filter(year >= 2010 & year <= 2020)
+
+
+
+```
+
+
+
+
+
+
+# Logitモデル
+
+## Exit-Logit with `fixest`
+
+- The number of observation reduced significantly.
+- It does not converge. 
+- Too many fixed effects prevent the model from converging.
+- Incidental parameters problem occurs.
+
+
+```
+
+es3 <- tryCatch(
+  fixest::feglm(
+    exitit ~ i(year, GBR, 2014) | year + AffiliateCode,
+    data = aff_eu,
+    family = "logit",
+    vcov = ~ country
+  ),
+  error = function(e) NULL
+)
+
+es4 <- tryCatch(
+  fixest::feglm(
+    exitit ~ i(year, GBR, 2014) | year + AffiliateCode,
+    data = aff_highEU,
+    family = "logit",
+    vcov = ~ country
+  ),
+  error = function(e) NULL
+)
+
+if (!is.null(es3) && !is.null(es4)) {
+  fixest::etable(es3)
+  fixest::etable(es4)
+
+  es3_n = as.numeric(es3[["nobs"]])
+  es4_n = as.numeric(es4[["nobs"]])
+  legend3 <- paste("EU (N = ", es3_n, ")")
+  legend4 <- paste("High income EU (N =", es4_n, ")")
+
+  iplot(list(es3, es4), pt.join = TRUE,
+        main = "Effect of the Brexit referendum on exit probability",
+        sub = "Affiliate-level balanced panel",
+        xlab = "Logit model"
+        )
+  legend("topleft", col = 1:2, pch = 10, cex = 0.7, lwd = 1, lty = 1:2,
+         legend = c(legend3, legend4),
+         title = "Comparison countries")
+} else {
+  plot.new()
+  text(0.5, 0.5, "TWFE logit model could not be estimated in this sample.")
+}
+
+```
+
+
+
+
+## Pooled logit QMLE DiD with `etwfe`
+
+- Following \citet{wooldridge2023simple}, we use a pooled logit QMLE DiD specification for the binary exit outcome.
+- The `etwfe` package implements the nonlinear pooled specification with group-level treatment timing.
+- This nonlinear specification is analogous to the linear ETWFE setup, but we avoid calling it "ETWFE logit" in the paper to keep the terminology consistent.
+  
+
+
+
+### High income EU {-}
+
+```{r}
+es8logit <- etwfe::etwfe(exitit ~  1  ,
+               tvar = year, # time var
+               gvar = first_year, # group var
+               #xvar = N_Aff_EU  ,
+               ivar =  year + AffiliateCode, # FEs
+               data = aff_highEU,
+               family = "logit",
+               vcov = ~country)
+fixest::etable(es8logit)
+
+
+# イベントスタディ係数と標準誤差を抽出
+coef_vec <- coef(es8logit)
+se_vec <- sqrt(diag(vcov(es8logit)))
+event_terms <- grep("^\\.Dtreat:first_year::2016:year::20(16|18|20)$",
+                    names(coef_vec),
+                    value = TRUE)
+
+es8Logit_results <- data.frame(
+  term = event_terms,
+  event = as.integer(sub(".*year::", "", event_terms)),
+  estimate = unname(coef_vec[event_terms]),
+  std.error = unname(se_vec[event_terms])
+)
+es8Logit_results$conf.low <- es8Logit_results$estimate - 1.96 * es8Logit_results$std.error
+es8Logit_results$conf.high <- es8Logit_results$estimate + 1.96 * es8Logit_results$std.error
+
+```
+
+
+
+### Estimation tables {-}
+
+```{r}
+# 推定結果の係数名を表示用に整える
+rename_fn = function(old_names) {
+  new_names = gsub(".Dtreat", "Year =", old_names)
+  setNames(new_names, old_names)
+}
+
+models <- list(
+               "Logit" = es8logit)
+
+modelsummary(
+  models, 
+  shape       = term:event:statistic ~ model, 
+  coef_rename = rename_fn, # rename
+  coef_omit = ".*N_Aff*", 
+  gof_omit    = "Adj|Within|IC|RMSE", 
+  stars = c('*' = 0.05, '**' = 0.01, '***' = 0.001) ,
+  title       = "Event study (pooled logit QMLE DiD)", 
+  notes       = "Std. errors are clustered at the county level" 
+)
+
+
+```
+
+
+### Event study plot
+
+```{r Fig6-ETWFE-exit-logit, dpi = 300}
+# イベントスタディ図
+# Add event to + 2016
+es8Logit_results$event <- es8Logit_results$event
+
+n_obs <- es8logit[["nobs"]]
+r2 <- es8logit[["pseudo_r2"]]
+label_caption <- paste0("Pooled logit QMLE DiD specification. Affiliate-level balanced panel. N = ", n_obs, ", Pseudo R2 = ", round(r2, 3), ".")
+
+# Plot the estimate
+p_etwfe_logit <- ggplot(es8Logit_results, aes(x = event, y = estimate)) +
+  geom_hline(yintercept = 0) +
+  scale_x_continuous(breaks = c(2016, 2018, 2020)) +
+  labs(x = "Year (two-year intervals)", 
+       y = "Effect of the Brexit referendum",
+       title = "Effects of the Brexit referendum on exit probability",
+       caption = label_caption
+       ) +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  geom_text(aes(label = round(estimate, 3)), 
+            vjust = -0.5, hjust = 0.5, size = 3)
+
+p_etwfe_logit <- p_etwfe_logit +
+  geom_pointrange(aes(ymin = conf.low, ymax = conf.high))
+
+p_etwfe_logit
+
+ggsave("../../04_tex/main/Fig6.eps", dpi = 300)
+```
+
+
+
+## プレトレンド検定
+
+### All observations {-}
+
+
+```{r event-study-test1, dpi = 300}
+# 事前係数をまとめたプレトレンド検定
+
+es10 <- fixest::feglm(exitit ~ 1+ i(year, GBR, 2014) 
+                       | year + GBR, 
+               data = aff_highEU,
+               #family = binomial(link = "logit"),
+               family = "logit",
+               vcov = ~ country)
+fixest::etable(es10)
+
+fixest::iplot(es10, pt.join = TRUE,
+      main = "Effect of the Brexit referendum on exit probability",
+      sub = "Affiliate-level balanced panel",
+      xlab = "Logit model"
+      )
+```
+
+
+### Not-yet treated observations {-}
+
+```{r event-study-test2, dpi = 300}
+# Subset of year <=2014
+aff_highEU_pre2014 <- aff_highEU %>% filter(year <= 2014)
+
+# Fixed effects & Interaction terms
+aff_highEU_pre2014$year2010 <- ifelse(aff_highEU_pre2014$year == 2010, 1, 0)
+aff_highEU_pre2014$year2012 <- ifelse(aff_highEU_pre2014$year == 2012, 1, 0)
+aff_highEU_pre2014$year2014 <- ifelse(aff_highEU_pre2014$year == 2014, 1, 0)
+aff_highEU_pre2014$year2010GBR <- aff_highEU_pre2014$year2010 * aff_highEU_pre2014$GBR
+aff_highEU_pre2014$year2012GBR <- aff_highEU_pre2014$year2012 * aff_highEU_pre2014$GBR
+aff_highEU_pre2014$year2014GBR <- aff_highEU_pre2014$year2014 * aff_highEU_pre2014$GBR
+
+
+es11 <- fixest::feglm(exitit ~  year2010GBR + year2012GBR + year2014GBR
+                       | year , 
+               data = aff_highEU_pre2014,
+               #family = binomial(link = "logit"),
+               family = "logit",
+               vcov = ~ country)
+fixest::etable(es11)
+
+# Joint Wald test of the coefficients
+# https://lrberge.github.io/fixest/reference/wald.html#ref-examples
+fixest::wald(es11, 
+             keep = "year201[[:digit:]]GBR", # Regular expression
+             print = TRUE)
+
+# Coefplot 
+fixest::coefplot(es11, 
+                 keep = "year201[[:digit:]]GBR",
+                 main = "Event study test",
+                 sub = "Affiliate-level balanced panel",
+                 xlab = "Logit model"
+                 )
+```
+
+
+
+
+# References {-}
+
+- [Create a publication-ready LaTeX regression table with `kableExtra` in R](https://tilburgsciencehub.com/topics/visualization/reporting-tables/reportingtables/kableextra/)
+
+- [modelsummary: regression tables](https://modelsummary.com/articles/modelsummary.html)
+
+- [fixest: Exporting estimation tables](https://lrberge.github.io/fixest/articles/exporting_tables.html#exporting-multiple-estimations-to-latex)
+
+
+For fixest:
+- [Fast Fixed-Effects Estimation: Short Introduction](https://cran.r-project.org/web/packages/fixest/vignettes/fixest_walkthrough.html)
+
+For OLS:
+- [Fixed-effects OLS estimations](https://lrberge.github.io/fixest/reference/feols.html)
+
+For Logit model:
+- [Fixed-effects GLM estimations](https://lrberge.github.io/fixest/reference/feglm.html)
+- [family: Family Objects for Models](https://rdrr.io/r/stats/family.html)
+- [LOGIT REGRESSION | R DATA ANALYSIS EXAMPLES](https://stats.oarc.ucla.edu/r/dae/logit-regression/)

@@ -1,0 +1,211 @@
+---
+title: "参入・退出・現地法人数／親会社数の統合"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = FALSE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+# 概要
+
+Data11（参入）・Data12（退出）・Data13（現地法人数・親会社数）の出力を
+産業×国×年をキーに統合し、分析用データを作成する。
+
+年次・比較群の絞り込みおよびダミー変数の作成は、分析ファイル（Tab1.Rmd 等）側で行う。
+
+# パッケージの読み込み
+
+```{r packages}
+library(dplyr)
+library(tidyr)
+library(rio)
+```
+
+# データの読み込み
+
+## 入力データ
+
+**現地法人レベル**
+
+- `../../03_data_output/EntryExit/N_affiliate_entry_country_industry_year.dta`（Data11産出）
+- `../../03_data_output/EntryExit/N_affiliate_exit_country_industry_year.dta`（Data12産出）
+- `../../03_data_output/EntryExit/N_affiliate_country_industry_year.dta`（Data13産出）
+
+**親会社レベル**
+
+- `../../03_data_output/EntryExit/N_parent_entry_country_industry_year.dta`（Data11産出）
+- `../../03_data_output/EntryExit/N_parent_exit_country_industry_year.dta`（Data12産出）
+- `../../03_data_output/EntryExit/N_parent_country_industry_year.dta`（Data13産出）
+
+## 出力データ
+
+- `../../03_data_output/EntryExit/N_affiliate_entry_exit.dta`
+- `../../03_data_output/EntryExit/N_affiliate_entry_exit_country_year.dta`
+- `../../03_data_output/EntryExit/N_parent_entry_exit.dta`
+- `../../03_data_output/EntryExit/N_parent_entry_exit_country_year.dta`
+
+```{r load-data}
+# 現地法人レベルの参入件数（産業×国×年）
+aff_entry  <- rio::import("../../03_data_output/EntryExit/N_affiliate_entry_country_industry_year.dta")
+# 現地法人レベルの参入件数（国×年）
+aff_entry_cy <- rio::import("../../03_data_output/EntryExit/N_affiliate_entry_country_year.dta")
+# 現地法人レベルの退出件数（産業×国×年）
+aff_exit   <- rio::import("../../03_data_output/EntryExit/N_affiliate_exit_country_industry_year.dta")
+# 現地法人レベルの退出件数（国×年）
+aff_exit_cy <- rio::import("../../03_data_output/EntryExit/N_affiliate_exit_country_year.dta")
+# 現地法人数（産業×国×年）
+aff_stock  <- rio::import("../../03_data_output/EntryExit/N_affiliate_country_industry_year.dta")
+
+# 親会社レベルの参入件数（産業×国×年）
+par_entry  <- rio::import("../../03_data_output/EntryExit/N_parent_entry_country_industry_year.dta")
+# 親会社レベルの参入件数（国×年）
+par_entry_cy <- rio::import("../../03_data_output/EntryExit/N_parent_entry_country_year.dta")
+# 親会社レベルの退出件数（産業×国×年）
+par_exit   <- rio::import("../../03_data_output/EntryExit/N_parent_exit_country_industry_year.dta")
+# 親会社レベルの退出件数（国×年）
+par_exit_cy <- rio::import("../../03_data_output/EntryExit/N_parent_exit_country_year.dta")
+# 親会社数（産業×国×年）
+par_stock  <- rio::import("../../03_data_output/EntryExit/N_parent_country_industry_year.dta")
+```
+
+# 現地法人レベルの統合
+
+```{r affiliate-combine}
+affiliate_entry_exit_count <- aff_entry %>%
+  # セクター変数名を他データと統一し、件数変数名を明示的に変更
+  rename(FASector         = FA_SectorCode2009,
+         N_entry_industry = N) %>%
+  # 結合キーと参入件数のみ残す
+  select(iso, FASector, year, N_entry_industry) %>%
+  # 退出件数を iso × FASector × year をキーに結合
+  full_join(
+    aff_exit %>% select(iso, FASector, year, N_exit_industry),
+    by = c("iso", "FASector", "year")
+  ) %>%
+  # 現地法人数を iso × FASector × year をキーに結合
+  full_join(aff_stock, by = c("iso", "FASector", "year")) %>%
+  # iso が欠損または空文字の観測を除去
+  filter(!is.na(iso), iso != "") %>%
+  mutate(
+    # 結合で生じた欠損（観測なし）を 0 に置換
+    N_entry_industry = replace_na(N_entry_industry, 0),
+    N_exit_industry  = replace_na(N_exit_industry,  0),
+    N_total_industry = replace_na(N_total_industry, 0)
+  ) %>%
+  # iso → FASector → year の順に並べ替え
+  arrange(iso, FASector, year)
+
+# 現地法人レベルの参入・退出・現地法人数統合データを保存
+rio::export(affiliate_entry_exit_count,
+            "../../03_data_output/EntryExit/N_affiliate_entry_exit.dta")
+```
+
+# 現地法人レベル（国×年）の統合
+
+```{r affiliate-combine-country-year}
+affiliate_stock_country_year <- aff_stock %>%
+  group_by(iso, year) %>%
+  summarise(
+    N_total = sum(N_total_industry, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+affiliate_entry_exit_country_year <- aff_entry_cy %>%
+  rename(N_entry = N) %>%
+  select(iso, year, N_entry) %>%
+  full_join(
+    aff_exit_cy %>%
+      select(iso, year, N_exit),
+    by = c("iso", "year")
+  ) %>%
+  full_join(affiliate_stock_country_year, by = c("iso", "year")) %>%
+  filter(!is.na(iso), iso != "") %>%
+  mutate(
+    N_entry = replace_na(N_entry, 0),
+    N_exit  = replace_na(N_exit,  0),
+    N_total = replace_na(N_total, 0)
+  ) %>%
+  arrange(iso, year)
+
+rio::export(
+  affiliate_entry_exit_country_year,
+  "../../03_data_output/EntryExit/N_affiliate_entry_exit_country_year.dta"
+)
+```
+
+# 親会社レベルの統合
+
+```{r parent-combine}
+parent_entry_exit_count <- par_entry %>%
+  # 件数変数名を明示的に変更
+  rename(N_entry_industry = N) %>%
+  # 結合キーと参入件数のみ残す
+  select(iso, Parent_SectorCode, year, N_entry_industry) %>%
+  # 退出件数を iso × Parent_SectorCode × year をキーに結合
+  # N_exit を他データと統一した変数名 N_exit_industry に変更
+  full_join(
+    par_exit %>%
+      rename(N_exit_industry = N_exit) %>%
+      select(iso, Parent_SectorCode, year, N_exit_industry),
+    by = c("iso", "Parent_SectorCode", "year")
+  ) %>%
+  # 親会社数を iso × Parent_SectorCode × year をキーに結合
+  full_join(par_stock, by = c("iso", "Parent_SectorCode", "year")) %>%
+  # iso が欠損または空文字の観測を除去
+  filter(!is.na(iso), iso != "") %>%
+  mutate(
+    # 結合で生じた欠損（観測なし）を 0 に置換
+    N_entry_industry = replace_na(N_entry_industry, 0),
+    N_exit_industry  = replace_na(N_exit_industry,  0),
+    N_total_industry = replace_na(N_total_industry, 0)
+  ) %>%
+  # iso → Parent_SectorCode → year の順に並べ替え
+  arrange(iso, Parent_SectorCode, year)
+
+# 親会社レベルの参入・退出・親会社数統合データを保存
+rio::export(parent_entry_exit_count,
+            "../../03_data_output/EntryExit/N_parent_entry_exit.dta")
+```
+
+# 親会社レベル（国×年）の統合
+
+```{r parent-combine-country-year}
+parent_stock_country_year <- par_stock %>%
+  group_by(iso, year) %>%
+  summarise(
+    N_total = sum(N_total_industry, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+parent_entry_exit_country_year <- par_entry_cy %>%
+  rename(N_entry = N) %>%
+  select(iso, year, N_entry) %>%
+  full_join(
+    par_exit_cy %>%
+      select(iso, year, N_exit),
+    by = c("iso", "year")
+  ) %>%
+  full_join(parent_stock_country_year, by = c("iso", "year")) %>%
+  filter(!is.na(iso), iso != "") %>%
+  mutate(
+    N_entry = replace_na(N_entry, 0),
+    N_exit  = replace_na(N_exit,  0),
+    N_total = replace_na(N_total, 0)
+  ) %>%
+  arrange(iso, year)
+
+rio::export(
+  parent_entry_exit_country_year,
+  "../../03_data_output/EntryExit/N_parent_entry_exit_country_year.dta"
+)
+```

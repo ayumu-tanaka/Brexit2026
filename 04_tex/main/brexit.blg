@@ -1,0 +1,55 @@
+This is BibTeX, Version 0.99d (TeX Live 2025)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: brexit.aux
+The style file: econ-aea.bst
+Reallocated glb_str_ptr (elt_size=4) to 20 items from 10.
+Reallocated global_strs (elt_size=200001) to 20 items from 10.
+Reallocated glb_str_end (elt_size=4) to 20 items from 10.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 150 items from 100.
+Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
+Database file #1: brexit_ref.bib
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated wiz_functions (elt_size=4) to 9000 items from 6000.
+You've used 42 entries,
+            6424 wiz_defined-function locations,
+            1506 strings with 17328 characters,
+and the built_in function-call counts, 56060 in all, are:
+= -- 10321
+> -- 1642
+< -- 118
++ -- 554
+- -- 562
+* -- 2608
+:= -- 6094
+add.period$ -- 42
+call.type$ -- 42
+change.case$ -- 312
+chr.to.int$ -- 42
+cite$ -- 42
+duplicate$ -- 824
+empty$ -- 1890
+format.name$ -- 534
+if$ -- 14590
+int.to.chr$ -- 0
+int.to.str$ -- 0
+missing$ -- 0
+newline$ -- 134
+num.names$ -- 342
+pop$ -- 526
+preamble$ -- 1
+purify$ -- 311
+quote$ -- 0
+skip$ -- 5647
+stack$ -- 0
+substring$ -- 6768
+swap$ -- 314
+text.length$ -- 42
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 717
+warning$ -- 0
+while$ -- 311
+width$ -- 0
+write$ -- 730

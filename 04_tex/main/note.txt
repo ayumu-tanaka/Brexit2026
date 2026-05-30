@@ -1,0 +1,915 @@
+# May 29, 2026
+
+## Two-year survey-wave revision
+
+- Harmonized the main empirical analysis to two-year OJC survey waves: 2010, 2012, 2014, 2016, 2018, and 2020.
+- Revised the R scripts for the main and appendix figures/tables so event-study plots, ETWFE estimates, and related labels use two-year intervals rather than annual post-2016 periods.
+- Updated `brexit.tex` to state that the analysis uses two-year survey-wave data, including the data section, empirical method section, aggregate entry-exit benchmark, results discussion, conclusion, and relevant appendix descriptions.
+- Added compact notation for the empirical time sets: `\mathcal{T}`, `\mathcal{T}_{pre}`, and `\mathcal{T}_{post}`.
+- Corrected the Table 1 discussion to match the reported absolute entry-exit difference: `|New Entry DiD| - |Exit DiD| = 0.294` with standard error `0.118`.
+
+
+# May 21, 2026
+
+* What if we drop or move our current affiliate-level analysis to the appendix, and instead make the industry-level analysis the main focus of the paper? (Unit of observation: industry × country × year.)
+
+* Specifically, we can use the industry-level data to analyze how Brexit affected both the number of entries and exits. 
+
+* Since the outcomes are counts with many zeros, it seems cleaner to make **Poisson QMLE (PPML)** the main framework throughout.
+
+1. 2 x 2 DiD (PPML) -- We already have in Table 1.
+2. Event study (PPML): a dynamic specification at the industry × country × year level.
+3. Synthetic DiD (SDiD)
+
+* The good news is that I have already reviewed my code and successfully constructed the necessary industry-level dataset for both entry and exit counts.
+
+* I think this approach will provide a cleaner framework to compare the entry and exit margins directly (same unit, same sample, same FE logic) and test the theoretical prediction. This should directly address the coarse review’s main criticism about the clarity of the entry-vs-exit comparison.
+
+
+
+
+# May 12, 2026
+
+## Rebuilding entry and exit count data from shareholder panel
+
+I have rebuilt the entry and exit count data from scratch using the shareholder-level panel (`shareholder_panel_iso_sector.dta`) as the base input, rather than the affiliate-level panel used previously. The data pipeline is now structured as follows:
+
+- **Data11** (`Data11_Entry_Data.Rmd`): Identifies the first appearance of each affiliate (affiliate-level, rank == 1) and each parent firm (all ranks) by country and two-digit sector, and counts new entries by country-industry-year.
+- **Data12** (`Data12_Exit_Data.Rmd`): Similarly identifies the last appearance of each affiliate and parent firm and counts exits by country-industry-year.
+- **Data13** (`Data13_N_Obs.Rmd`): Counts the stock of affiliates (rank == 1) and parent firms (all ranks) by country-industry-year.
+- **Data14** (`Data14_Entry_Exit_Data.Rmd`): Joins the entry, exit, and stock counts from Data11--13 into a single integrated file (`N_affiliate_entry_exit.dta` and `N_parent_entry_exit.dta`).
+
+All intermediate data files have been renamed to follow the `N_` prefix convention (e.g., `N_affiliate_entry_exit.dta`) and are stored in `03_data_output/EntryExit/`.
+
+## Revisions to Table 1
+
+I revised the cross-margin equality test in Table 1 to test the difference in the **absolute values** of the entry and exit DiD coefficients, |β_entry| − |β_exit|, rather than the signed difference β_entry − β_exit. The test is based on the delta method applied to a stacked PPML model, using the variance-covariance matrix to compute the standard error.
+
+The updated estimates are: |β_entry| − |β_exit| = 0.294 (SE = 0.118, p = 0.013), indicating that the magnitude of the new-entry decline (−0.298) significantly exceeds the magnitude of the exit increase (+0.004). This asymmetry is consistent with a real-options interpretation: the Brexit referendum deterred new investment more strongly than it accelerated the withdrawal of existing affiliates.
+
+
+
+
+# May 4, 2026
+
+## Export-platform mechanism
+
+- I implemented the export-platform robustness check using parent firms with UK manufacturing affiliates and EU sales/wholesale affiliates. 
+- However, the resulting sample is quite small, with only about 40 parent firms, and the event-study estimates show pre-trends. 
+- Given these limitations, I think it may be better not to include this result in the paper. 
+- Results: temp/Check_UK_ExportPlatform_Exit_Robustness.html
+
+## Industry-level 2 x 2 DiD
+
+- I added the industry-level estimates to Table 1 (Impact of Brexit Referendum on Japanese FDI (2x2 DiD)), instead of the country-level results. 
+- The updated table now reports country-industry-year PPML estimates.
+- To address the coarse review comment that the entry-exit asymmetry was not formally tested, I revised the placement and interpretation of Table 1.
+- I further revised Table 1 to include a formal cross-margin equality test between the entry and exit DiD coefficients. The test is based on a stacked PPML specification that pools the exit and new-entry counts at the country-industry-year level and estimates the coefficient difference as a margin-by-treatment interaction.
+- The estimated difference (New Entry DiD - Exit DiD) is -0.326 with a standard error of 0.092, and the equality test rejects at p < 0.001. This provides a formal aggregate-level test supporting the entry-exit asymmetry, while the main text still treats Table 1 as a benchmark rather than the final margin-specific evidence.
+- I moved Table 1 from the data/preliminary-analysis section to a standalone Section 4, "Aggregate entry-exit benchmark," placed before Section 5, "Affiliate exit responses." The text now explains that the table puts exit and entry in a common country-industry-year PPML framework before the more detailed affiliate-level analyses.
+
+## Bloom et al. (2025) 
+- I added a reference to Bloom et al. (2025) in the introduction to highlight the broader context of Brexit and policy uncertainty and its impact on investment decisions, which is relevant to our paper's focus.
+
+## Next step
+
+Coarse review: https://coarse.ink/review/1f9a36bc-171e-4b54-aee8-00862bfd94e6?token=bKhqiF3f4Gawcna-hZdp8Qq4f689hKfkP7ewqIt830M 
+
+I obtained an additional review from coarse (https://coarse.ink). One of its main comments was that our entry-exit asymmetry is not formally tested enough, since the main exit and entry estimates come from different empirical settings. To address this, I have already revised Table 1 to include a stacked industry-level PPML equality test between the entry and exit DiD coefficients, and moved Table 1 to a standalone Section 4 as an aggregate entry-exit benchmark.
+
+As a next step, I am thinking of extending this industry-level benchmark further. Specifically, we could add industry-level event-study estimates and possibly Wooldridge-style nonlinear DiD / pooled Poisson QMLE estimates for both exit counts and entry counts using the same country-industry-year framework. This would not replace the affiliate-level exit analysis, but it would provide a cleaner common framework for comparing the entry and exit margins and would directly respond to the concern that the asymmetry is based on narrative comparison across different specifications.
+
+Do you think this extension is worth adding to the main text, perhaps as a short expansion of Section 4, or would it be better to keep it as an appendix robustness check?
+
+
+# April 30, 2026
+
+## Introduction: Kox UIFS4 evidence added
+
+Added a short paragraph to the introduction using Kox's UIFS4 bilateral inward FDI stock data. The new text emphasizes Japan's importance as a source of UK inward FDI: Japan was in the UK's top 10 source economies throughout 2001--2022, ranked sixth overall and second among non-EU source economies in 2016, and remained the second-largest non-EU source economy from 2014 onward. 
+
+## Appendix H added
+
+Added Appendix H ("Exit and entry responses by Brexit MFN risk exposure") to `brexit.tex`. Affiliates are classified into three groups — High MFN Risk, Low MFN Risk, and Service — using the OJC affiliate sector code matched to sector-level MFN risk estimates from Graziano et al. (2021) Table A1 (threshold: overall mean = 0.145). The appendix covers both exit and entry margins:
+
+- **Exit (Figure H4):** The baseline TWFE event-study specification is estimated separately for each group. Affiliates in high MFN risk sectors show a significant increase in exit probability in 2019–2020; low-risk and service sectors do not.
+- **Entry (Table H6):** PPML event-study coefficients and pooled Poisson QMLE ATT estimates using host-country-by-industry entry counts show the largest decline in new entry for high MFN risk sectors by 2020.
+
+This addresses Referee 1 Comment 6 (sector-level Brexit-intensity variation). Also updated `Referee_report1.txt` accordingly.
+
+
+## Export-platform mechanism
+
+How about adding the following robustness check based on Mike's idea?
+
+- We could identify parent firms that had manufacturing affiliates in the UK and sales/wholesale affiliates in EU member countries before Brexit. 
+- These firms are likely candidates for using the UK as an export platform for the European market. 
+- We could then restrict the sample to UK affiliates belonging to these parent firms and re-estimate the impact of Brexit on affiliate exit. 
+- If the Brexit effect becomes stronger, in this subsample, it would provide additional insight on multinational firms' exit behaviour.
+
+
+# April 15, 2026
+
+## Appendix additions
+
+- Added Appendix F, reporting affiliate-level event-study estimates split by parent-level UK exposure.
+- Added Appendix G, reporting affiliate-level event-study estimates split by whether the parent firm had one UK affiliate or two or more UK affiliates in 2010. 
+Mike's Comments - these are good!!
+Suggested new titles
+Deterred Entry but Persistent Presence: The Brexit Announcement on Japanese FDI in Britain
+
+Policy Uncertainty and FDI Dynamics: Evidence from Japanese FDI in Brexit Britain
+
+An Entry Barrier but Not an Exit Incentive: The Role of Sunk-Costs in Post-Brexit Japanese FDI into the UK (maybe too long?)
+
+Anchored in Uncertainty: Asymmetric Effects on Japanese MNEs in Brexit Britain
+
+
+--> Ayumu's thought on title
+
+Thank you for the excellent title suggestions!!
+
+"Anchored in Uncertainty" sound very nice. To better align with the fact that our entry results are relatively modest in significance, I'd like to propose a slight hybrid version:
+
+"Anchored in Uncertainty: Asymmetric Entry and Exit Responses of Japanese MNEs to the Brexit Announcement".
+
+- By using "the Brexit Announcement," we clarify that our study focuses on the post-referendum uncertainty period (2016–2020). 
+
+What do you think?
+
+## Next task
+
+I would like to address the sectoral heterogeneity issues:
+
+6.  **Sector variation.** The authors seem to have the information about the affiliates' sectors (or parents'). Different sectors were exposed differently to Brexit. Within goods, some sectors faced a potentially higher tariff in the event of Brexit (e.g. Graziano et al., 2021). Within services, they faced different regulations (e.g. Ahmad et al., 2022).¹ I think employing "Brexit-intensity" variation across sectors to identify the effect on exit would strengthen the paper.
+
+
+# April 6, 2026
+
+## Toyo Keizai's request
+
+Toyo Keizai wants to feature a summary of our joint paper with Tadashi on their website.
+
+https://en.datalab.toyokeizai.net/Analysis/20260331000012
+password: tkdatalabpass
+
+Wiley has approved it.
+
+Tadashi has already approved it, and I am also happy with the draft. It seems like a good opportunity for outreach. What do you think?
+
+
+## Revisions to `brexit.tex` since March 25, 2026
+
+**Framing and terminology (responding to Referee Comment 1)**
+- Throughout the paper, replaced "Brexit" with "the Brexit referendum" or "the referendum" wherever the text refers to the June 2016 vote and the associated uncertainty period (2016–2020), to distinguish it from the UK's formal exit in January 2020/2021.
+- Abstract, highlights, and introduction rewritten to frame the paper's contribution as estimating responses to referendum-induced uncertainty, not to Brexit itself.
+- A scope clarification was added explicitly to the introduction: "our estimates should be interpreted as responses to the referendum and associated policy uncertainty rather than to the post-2021 trading regime."
+
+**Abstract and highlights**
+- Abstract replaced: now reports the main finding as an asymmetry between entry and exit margins, including the SDiD point estimate (~13.5% entry reduction) and the caveat on statistical sensitivity to SE choice.
+- Highlights revised accordingly: dropped "hysteresis in high asset-specificity industries" and "divestment" framing; centered on the entry-exit asymmetry.
+- Keywords: removed "divestment."
+
+**Paper scope: divestment analysis dropped**
+- The divestment/ownership-ratio analysis has been removed from the paper. The exit analysis is now the sole focus of §5; related text, footnotes, and figure references to the ownership ratio were deleted.
+
+**Section structure reorganized**
+- §4 (Empirical Method) restructured into four subsections: §4.1 TWFE, §4.2 ETWFE (new), §4.3 Nonlinear DiD (moved from §5.2), §4.4 Synthetic DiD.
+- §5 (Results) now covers exit results and robustness; new §6 covers entry results separately.
+- Road-map sentence in introduction updated to reflect the new structure.
+
+**New §4.2: ETWFE methodology**
+- Added a full methodological exposition of the ETWFE model (Wooldridge 2021), including the baseline equation, the controls extension (eq. ETWFE2), and the pooled-regression equivalence result.
+- §5.2 ETWFE results now cross-references §4.2 rather than repeating the methodology.
+
+**§4.3 Nonlinear DiD: new common framework**
+- Added a unified CNA/CIPT framework (Wooldridge 2023) for both exit (pooled logit QMLE) and entry (pooled Poisson QMLE).
+- The logit DiD subsection explains the practical motivation for pooled QMLE over fixed-effects logit (convergence failure, incidental parameters).
+- The Poisson DiD subsection (eq. entry_ppml) now lives in §4.3, with the entry-specific specification fully written out.
+
+**§4.4 Synthetic DiD**
+- Opening sentence rewritten to motivate SDiD as a guard against violations of the parallel trends assumption (not just as a robustness check).
+- Footnote 20 (unit/time weights): two equations removed, replaced with brief text descriptions referencing Arkhangelsky et al. (2021) equations 4 and 6.
+
+**Notation unified throughout**
+- Covariates: X (scalar) → x (bold vector) consistently.
+- Treatment indicators: UK=1/D=1 mixed usage → D_i for exit analysis, D_h for entry analysis, D for the common framework.
+- W_{it} (SDiD treatment) → D_{it} throughout §4.4.
+- SDiD weight notation: ω̂^{sdid} → ω̂_i, λ̂^{sdid} → λ̂_t.
+- Outcome variables: Entry_{hkt} → Y_{hkt} in the Poisson entry analysis; Y_{it} (with clarification that i indexes country-industry pairs) in the SDiD entry analysis.
+- DiD interaction term: x → × (\times) in UK × Post-Referendum.
+
+**Data section**
+- Divestment-related text removed; affiliate-level data description simplified.
+- Figure 1 updated to a single-panel comparison with high-income EU (replacing the two-panel UK/Germany + UK/EU figure).
+- Figure source comments updated to new Rmd file names (01_code/figures/).
+
+**New Table 1: aggregate 2×2 DiD**
+- A preliminary aggregate PPML DiD table (Tab1) added to §3, summarizing the entry-exit asymmetry at the country level before the affiliate-level analysis.
+
+**Model section**
+- Language updated to frame predictions as responses to the referendum shock and associated uncertainty rather than to "Brexit."
+- Footnote added on model scope: abstracts from partial divestiture, focuses on full entry/exit choices to align with the empirical analysis.
+
+
+**Figure and table file renaming**
+
+EPS/figure files were renamed from descriptive names to sequential numbering matching the paper:
+- Fig1b-N-EU-GBR.eps → Fig2.eps
+- Fig2a_plot_exit-compare-aff.eps → Fig3a.eps
+- Fig2b_plot_enter-aff-compare.eps → Fig3b.eps
+- Fig3-TWFE-Exit-OLS-HighEU.eps → Fig4.eps
+- Fig5-Imputation.eps → Fig5.eps
+- Fig6-ETWFE-exit-logit.eps → Fig6.eps
+- Fig7-SDiD.eps → Fig7.eps
+- Fig8-AssetSpecificity.eps → Fig8.eps
+- Fig9-SDiD-Entry.eps → Fig9.eps
+- FigA1-map-aff-2010-2020.pdf → FigA1.pdf
+
+R script files were also renamed to match figure/table numbers:
+- Des02_country_level.Rmd → Fig2_X2.Rmd
+- Data26_brexit_firms.Rmd → Fig3a_X1_X3.Rmd
+- (new_entry_another_approach.Rmd) → Fig3b.Rmd
+- TWFE-Brexit-Affiliate-OLS-MICE.Rmd → Tab2_Fig4_5.Rmd
+- TWFE-Brexit-Affiliate-Logit.Rmd → Fig6.Rmd
+- Est09_Brexit_SDiD_Aff.Rmd → Fig7.Rmd
+- Affiliate-OLS_Specificity.Rmd → Fig8.Rmd
+- Est10_Brexit_SDiD_Entry.Rmd → Fig9.Rmd
+
+**Referee response tracking**
+- `04_tex/main/EER/Referee_report1.md`: response status added below each of the 11 referee comments, indicating which are addressed, partially addressed, in progress, or not yet addressed.
+- `04_tex/main/EER/Referee_report2.md`: same treatment applied to all 5 referee comments.
+
+
+# March 23, 2026
+
+## On your indicator idea
+
+I will explore whether your "Production-Distribution Separation" indicator can be implemented using the Toyo Keizai data. I'll see if we can identify export platforms by cross-checking manufacturing and sales sectors of affiliates by the firm level.
+
+It should be straightforward to perform an additional robustness check by re-estimating the model excluding 11 affilaites that self-report as "Export Platform (EPFDI=1)" in the Toyo Keizai data. This will help address Referee 2's concerns directly.
+
+.	tab year	EPFDI	if GBR
+
+			EPFDI
+	year		0	1	Total
+					
+	2010		485	11	496 
+	2012		485	11	496 
+	2014		485	11	496 
+	2016		485	11	496 
+	2017		485	11	496 
+	2018		485	11	496 
+	2019		485	11	496 
+	2020		485	11	496 
+	2021		485	11	496 
+					
+	Total		4,365	99	4,464 
+
+
+## Revisions
+
+1. Appendix D now reports the SDiD (Synthetic DiD) weights, clarifying which countries are driving the synthetic control for the UK.
+
+2. Successfully confirmed that the results for the exit probability remain robust even when expanding the control group to include non-EU high-income countries (addressing the concern about common shocks to the European continent).
+
+3a. Updated the notation in Section 7.1 to ensure full consistency with the revised model's parameters (e.g., uncertainty and asset specificity).
+3b. Revised the Conclusion to better align with the new theoretical implications, specifically emphasizing the asymmetric impact of Brexit on entry and exit.
+
+4. Conducted additional analyses on the Entry margin at both the firm-level and industry-level. However, the preliminary results show pre-trend issues, suggesting that the parallel trends assumption might not hold under the current specifications. I am exploring alternative approaches, such as PPML with host-country-industry aggregation or further refining the control group.
+
+## Next Steps
+
+Currently re-reviewing the referees' comments to ensure every minor concern has been addressed.
+
+
+
+# For the March 13, 2026 meeting
+1) Mike is working on the #5 (export platform vs market seeking) Some thoughts in file 
+
+Export Platform vs Market Seeking Ideas
+
+
+# March 6, 2026
+
+Following your comments, I have updated the introduction in Overleaf. Here is a summary of the changes:
+
+1. Replaced "Brexit process" with "the uncertainty following the Brexit referendum" or "post-referendum" to maintain consistency with our model's focus on uncertainty.
+2. Specified that the slowdown in investment and output losses (e.g., Born et al., 2019) refers to the pre-implementation phase.
+3. Explicitly highlighted how policy uncertainty interacts with sunk costs to widen the hysteresis band.
+4. Refined the language to focus on expected institutional changes rather than post-implementation structural shifts.
+5. Included the revised model section.
+
+Please let me know if these adjustments look good to you.
+
+
+**Proposed revision plan: Remaining Tasks**
+
+1. Expand the analysis of entry and discuss entry and exit results side by side, in line with the model’s predictions.
+
+2. Add complementary evidence using aggregate FDI data from Kox (2025), to show that the findings are not unique to Japanese firms. --> Mike's comment: Kox data cannot tell firm-level entry from exit. We can omit this revision.
+
+3. Make the SDiD weights transparent. Since firm-level weights would be difficult to visualize, we could aggregate the weights (e.g. at the country level) and report them clearly. --> Try first
+
+4. Change the main control group to non-EU high-income countries and use this to assess the robustness of the results. --> Try second
+
+5. Explore heterogeneity between export-platform FDI and market-seeking FDI, while acknowledging that sample size limitations in the Toyo Keizai data may constrain this analysis. Mike's comments: Other affiliates in the EU. Wholesale/Retail?
+
+6. Change the notation of section 7.1 to accommodate the revised model. (Easy)
+
+
+
+# March 6, 2026 (from Mike)
+- In several spots in the intro, we talk about the "Brexit process." Do we need to change these to "Brexit announcement", "Brexit announcement effect," or something similar 
+
+- On page 2, we mention "and research does indicate slowing foreign investment into the UK" - this literature refers to a slowing before  Brexit went into force, or another time period?  I think we need to be more specific here 
+
+Model (model_R3.tex) is great in explaining that we are looking at Brexit uncertainty and seems to really address the prior referees' commnents
+
+- This model is good/well written
+
+# March 4, 2026
+
+- I have revised the theoretical section in the file "model_R3.tex." 
+- Specifically, I have integrated the framework of Graziano et al. (2021) into our model by simplifying their setup to better fit our context.
+
+
+# February 25, 2026
+
+- I need to learn Garetto et al. (2024, R&D at AER) to understand the role of export-platform FDI in our case.
+
+- I need to learn Graziano, A. G., Handley, K., & Limão, N. (2021) to incorporate the uncertanty in our model because our empirical part uses the period before the actual Brexit.
+
+
+
+# January 13, 2026
+
+## Revision Plan
+
+Based on the EER referee reports, I would like to suggest the following revision plan for the paper. The goal is to directly address the main concerns raised by the referees while keeping the revisions focused and feasible.
+
+What do you think of the following proposed revision plan?
+
+**Proposed revision plan**
+
+* Clarify explicitly that the paper focuses on the *Brexit referendum* and the uncertainty it generated, rather than on Brexit as a realized institutional change.
+
+* Relate the theoretical model to the recent literature on FDI dynamics and sunk costs (Garetto et al.,) to better situate the model within existing research.
+
+* If feasible, introduce policy uncertainty into the model, drawing on Handley and Limão (2015) and Graziano et al. (2021).
+
+* Expand the analysis of entry and discuss entry and exit results side by side, in line with the model’s predictions.
+
+* Add complementary evidence using aggregate FDI data from Kox (2025), to show that the findings are not unique to Japanese firms.
+
+* Make the SDiD weights transparent. Since firm-level weights would be difficult to visualize, we could aggregate the weights (e.g. at the country level) and report them clearly.
+
+* Change the main control group to non-EU high-income countries and use this to assess the robustness of the results.
+
+* Explore heterogeneity between export-platform FDI and market-seeking FDI, while acknowledging that sample size limitations in the Toyo Keizai data may constrain this analysis. Mike's comments: Other affiliates in the EU. Wholesale/Retail?
+
+
+## References
+
+Garetto, S., Ma, X., Oldenski, L., & Ramondo, N. (n.d.). Multinational Expansion in Time and Space.
+
+Graziano, A. G., Handley, K., & Limão, N. (2021). Brexit Uncertainty and Trade Disintegration. The Economic Journal, 131(635), 1150–1185. https://doi.org/10.1093/ej/ueaa113
+
+Handley, K., & Limão, N. (2015). Trade and Investment under Policy Uncertainty: Theory and Firm Evidence. American Economic Journal: Economic Policy, 7(4), 189–222. https://doi.org/10.1257/pol.20140068
+
+Kox, H. L. M. (2025). Repairing a Historical Mistake in Bilateral FDI Statistics: A New Dataset Covering 2001–2022. Review of International Economics, roie.70004. https://doi.org/10.1111/roie.70004
+
+
+
+# June 18, 2025
+From Ayumu:
+- Because we have excluded the re-entry possibility, I have modified the equations to make them simple: FDI_{ih}^{-} to FDI_{ih, t-1}
+- Added the doi for the Head and Mayer paper.
+
+# June 12, 2025
+From Mike: 
+1) I have sent highlights via email. I am not sure where they go in the paper, or if they are simply part of the submission.
+2) I have made edits to the "affiliate vs firm" in the text in section 1. In section 2, I added the word "parent" in a few places to identify that it is the parent making the FDI decision to open/close/divest from an affiliate.
+
+From Ayumu:
+1) LaTeX Template
+- I used Elsevier's LaTeX template and incorporated the highlights that Mike sent.
+
+2) R Codes
+- I checked all the R code files, revised and renamed them for clarity, and saved them as "temp/Scripts 2025-06-11.zip".
+- I re-ran the revised R code and replaced the figures and tables in both the main text and the Online Appendix. The results changed slightly but remained largely consistent with the previous version.
+
+3) Number of Affiliates
+- I found that the 10% ownership cutoff is the main reason for the discrepancy in the country-level number of affiliates between the book and our estimation sample.
+- The original OJC data shows 34 affiliates in Portugal in 2010, but only 14 have more than 10% ownership by top Japanese parent firms.
+  * See "temp/Des01\_check\_Portugal.pdf".
+- I revised the country list in Appendix A and the location map in Appendix C to ensure comparability by showing the number of affiliates in 2010.
+
+4) Number of new entries
+- Our data has bi-annual data for the pre-referendum period (2010, 2012, 2014, 2016) and annual data for the post-referendum period (2016, 2017, 2018, 2019, 2020).
+- This data structure results in a smaller number of new entries for the post-referendum period. 
+To make the number of new entries in the pre- and post-referendum periods comparable, I used bi-annual data for both periods and re-created Figure 2(b) (Number of new entries) and Figure 9 (Synthetic DiD). 
+- Results remain consistent with our story.
+
+5) Minor edits. Corrected the notations/typos in equations.
+
+6) Wrote the "CoverLetter.txt."
+
+
+# June 4, 2025
+
+From Mike:
+1) The updated title is good. I dropped the "s'" from the word affiliate.
+2)The use of the word affiliate is good in some situations in the introduction to distinguish between the Japan-based parent and the subsidiary.  But, to me, a universal change from firms to affiliates should be avoided. Perhaps, "parent" instead of firm or affiliate in some places is the appropriate noun.
+
+3) Yes, let's remove the trade cost channel appendix section.
+
+From Ayumu:
+- How to address the JIE Referee's comment "The narrative in the paper seems to suggest that decisions about whether to operate or not are in the hands of the affiliate, and not of the parent. More clarity is needed in this part."
+- I found 191 "plant" and 11 "firm" in  Roberts & Tybout paper "The Decision to Export in Colombia". In our paper, the model uses the word "firm" but empirical part uses affilaite-level data. There is a large gap.
+- How about adding the following sentences in the end of the theoretical section or the begining of the empirical section:
+"Our theoretical model focuses on parent firm decision-making regarding foreign affiliate operations. We test these predictions using affiliate-level data for two reasons. First, our data is available at the affiliate level, providing the granular information necessary to examine Brexit's heterogeneous impacts across different affiliates within the same parent firm. Second, while strategic decisions about market entry and exit ultimately rest with the parent firm, these decisions are implemented and observed at the affiliate level, making affiliate-level data the appropriate unit of analysis for testing our theoretical predictions."
+
+- Previous version of manuscript is saved as "Oldversion/brexitOLD.tex." and revised "brexit.tex" as follows:
+- Changed the title to the one Mike proposed: 
+ Old title: "No-Exit Brexit: Multinational Firms' Exit and Divestment in the  UK"
+ New title: "Anchored Abroad: Sunk Costs, Asset Specificity, and Japanese Exit from Brexit Britain"
+- How about "Anchored Abroad: Sunk Costs, Asset Specificity, and Japanese Affiliates' Exit from Brexit Britain" by adding the term "Affiliates'"?
+- Revised the Introduction.
+    - Refrased "firms" to "affiliates" to address the reviewer's comment.
+    - Refrased "global" to "EU" to clarify the scope of the paper.
+    - Deleted the sentences about the uncertainty of Brexit to focus on our
+     main argument.
+- Included the literature review into various places in the paper. E.g., contribution to the literature in the Introduction, variable explanation in the empirical section.
+- Revised asset specificity section.
+    - included the extended model that incorporates asset specificity.
+- Revised the data and emprical method sections to be consistent with the revised results and model.
+- Revised the Conclusion section to reflect the new results in Section 7.
+- Revised Abstract to reflect the new results and model.
+- Can we remove the Appendix section "Trade cost channel"? It is a bit awkward because the paper is now focusing on the hysterisis effects, although it took considerable time to perform this analysis. Additionally, the small number of observations as well as the violation of the PT assumption is concerning.
+
+# May 28, 2025
+
+From Mike:
+I like the paper's asset specificity section. My question: Do we talk about it enough to include it in the title? Do we need to talk more about it?
+
+From Ayumu:
+- I incorporated the asset specificity results.
+- I combined "The impacts on the new entry" and  "Asset specificity" into one section named "Identifying the mechanism."
+- I revised the Bib file for consistency. 
+    - For example, I changed "brexit" to "Brexit." 
+    - The ordering of the papers is now alphabetical based on the name of the first author.
+- Checking the references, I could not find the following papers at the Google Scholar. Therefore, I deleted them and corresponding sentences. 
+  * Eaton, J., Kortum, S., and Kramarz, F. (1996). Sunk costs and the dynamics of export decisions.NBER Working Paper No. 5246.
+  * Rob, R. (1991). Learning and hysteresis in trade and investment. Journal of International Economics,30(1-2):101–116.
+  * Balsvik, R., Jensen, B., and Wang, J. (2020). “Trade policy uncertainty and foreign direct investment: Evidence from Brexit.” Economics Letters, 190, 109082. https://doi.org/10.1016/j.econlet.2020.109082
+  * Lilien, D. M. (2000). “Entry and exit decisions in the presence of real options: A synthesis.” Review of Economic Dynamics, 3(4): 728–750.
+  * Ghemawat, Pankaj. 2003. “Distance still matters: The hard reality of global expansion.” Harvard
+Business Review 81 (8): 137–147
+
+"An important strand of the literature considers the role of sunk and exit costs in shaping FDI
+decisions. According to Eaton et al. (1996), sunk costs—non-recoverable expenditures incurred upon
+market entry—create persistence in FDI behavior, as firms are reluctant to exit once these costs are
+committed. This suggests that firms established in a host country may be less reactive to temporary
+economic or political fluctuations. Rob (1991) similarly highlight the irreversibility of FDI and its
+hysteresis effects, whereby firms delay exits in anticipation of future improvement. In the context of Brexit, these theories suggest that many Japanese and other foreign affiliates may have remained in
+the UK not because of favorable conditions, but because of the high costs of exiting—such as capital
+write-downs, severed supplier ties, and relocation costs."
+
+"\citet{balsvik2020trade} suggest that affiliates deeply integrated into EU supply chains face heightened risks of divestment or failure as trade barriers increase post-Brexit."
+
+# May 21, 2025
+From Mike:
+ - I have incorporated the divestment literature into the paper as a footnote (now footnote #15)
+ -Some possible titles
+"Anchored Abroad: Sunk Costs, Asset Specificity, and Japanese Exit from Brexit Britain”
+"The Brexit That Wasn't: Sunk Costs and the Persistence of Japanese Multinationals”
+“No-Exit Brexit: Hysteresis, Sunk Costs, and FDI Inertia in the UK”
+
+
+From Ayumu:
+ - I wrote the Appendix section E "Trade cost channel versus hysteresis channel." 
+ - I added the Acknowledgments section.
+ - I removed unnecessary files and renamed Figure files for consistency.
+ - I included a reference to Kermani and Ma (2023) in the model section.
+ - To address the reviewer's comment 1.3, using the data from Kermani and Ma (2023), I classified industries into those with low asset specificity and those with high asset specificity. "Appendix F"
+ - Then, I conducted event study regressions for subsamples of industries with low and high asset specificity.
+ - As the reviewer suggested, the impacts of Brexit on the exit probability are significantly positive for industries with low asset specificity, while they are insignificant for industries with high asset specificity. "temp/30_TWFE-Brexit-Affiliate-OLS_RecoveryRate.pdf"
+ - The results are in line with the hysteris effects and Kermani and Ma (2023).
+ - So, I want to omit the robustness checks using the survival years of affiliates.
+ 
+
+Reviewer's comment:
+"1.3	Heterogeneous Effects of Brexit
+The paper found insignificant heterogeneous effects of Brexit across affiliates of different sizes or across different sectors. Rather than supporting the proposed FDI hysteresis effects, these results undermined the argument. Would larger affiliates face higher sunk costs of divestiture, making them less likely to exit during periods of high Brexit uncertainty? Industries with greater asset irreversibility are also more affected by increased uncertainty and thus would affiliates operating in more affected industries respond more to Brexit? Such heterogeneous effects are well documented in the empirical literature on the impacts of uncertainty shocks, see, e.g., Kim and Kung (2017) and Kermani and Ma (2023)."
+
+
+# May 14, 2025
+
+- Are survival years the measure of sunk costs? Do older firms tend to stay in the UK? 
+ - Subsamples of younger and older affiliates.
+
+- Identifying the Export-platform affiliates. 
+ - Using the purpose of investment in the OJC data, we can identify the export-platform affiliates.
+ - I define the export-platform affiliates as those whose purpose of investment is "G: Exporting to Third Countries" in the OJC data.
+ - I also define the horizontal affiliates as those whose purpose of investment is "F: Developing Local Markets" in the OJC data.
+ - Using the subsample of the export-platform and horizontal affiliates, we can check whether the hysteresis channel is more important than the trade cost channel. The effects of Brexit on the exit of the export-platform affiliates should be larger than those of the horizontal affiliates if the trade cost channel is more important than the hysteresis channel.
+ - However, we did not find any significant effects of Brexit on the exit of the export-platform affiliates post Brexit. See "temp/29_TWFE-Brexit-Affiliate-OLS_FDItype.pdf" for the results.
+
+A "Securing and Utilizing Resources and Materials"
+B "Securing and Utilizing Labor"
+C "Utilizing Preferential Policies of Local Governments"
+D "Establishing and Utilizing International Production Networks"
+E "Establishing and Utilizing International Distribution Networks"
+F "Developing Local Markets"
+G "Exporting to Third Countries"
+H "Reimporting to Japan"
+I "Following Business Partners or Affiliated Companies Overseas"
+J "Fundraising, Asset Management, and Exchange Rate Risk Management"
+K "Collecting Information and Obtaining Royalties"
+L "Product Planning, Development, and Research"
+M "Entering New Businesses"
+N "Strengthening Regional Headquarters Functions"
+O "Addressing Trade Friction"
+P "Other Activities such as Mergers and Acquisitions"
+
+
+Referee comment:
+"1.	The authors interpret the lack of affiliate exit and divestment as driven by increased hysteresis associated with the increase in macroeconomic uncertainty caused by Brexit. While I am sympathetic to this interpretation, the authors have no hard evidence to push this narrative. The same qualitative outcome could be driven by a completely different mechanism. Several papers in the literature frame Brexit as analogous to an increase in trade costs between the UK and continental Europe. While an increase in trade costs would affect the activities of exporters, it is not clear it should affect MNE affiliates. More precisely, if Japanese MNE affiliates are mostly horizontal in scope (as it appears to be the case in the UK), an increase in UK-EU trade costs should not affect their operations. So one could interpret the paper’s empirical finding as simply confirming that the increases in trade costs associated with Brexit did not affect horizontal FDI. One way to disentangle the trade costs channel from the hysteresis channel would be to compare affiliates with different destinations of their sales. While horizontal affiliates’ exit should not be affected by Brexit either via the trade cost channel or via the hysteresis channel, affiliates that sell to third markets (export platform affiliates) should exhibit increased exit from the UK according to the trade cost channel, but not according to the hysteresis channel. In other words, a robustness analysis based on export platform affiliates would be more persuasive of the actual mechanism in place. The authors talk about the role of trade with the EU for interpreting the results at the end of Section 2, but a thorough analysis exploiting information on the destination of affiliate sales is missing."
+
+Mike's Notes on Divestment - studies that use divestment rather than employment reduction and/or sales reduction to measure divestment.
+1. UNCTAD World Investment Reports (e.g., 2016, 2018)
+How divestment is measured: Changes in foreign direct investment (FDI) positions and flows, specifically negative greenfield or M&A values due to asset sales or closures.
+Example: UNCTAD reports often note instances of foreign affiliate divestments, such as when a multinational sells off or shuts down a subsidiary in a host country.
+Citation:
+UNCTAD. (2016). World Investment Report: Investor Nationality – Policy Challenges. United Nations Conference on Trade and Development.
+
+2. Belderbos & Zou (2006) – "Foreign divestment and relocation by Japanese electronics firms in East Asia"
+How divestment is measured: Exit of Japanese foreign affiliates using MITI data (Ministry of International Trade and Industry).
+Measurement: Observed closures or ownership transfers of affiliates; direct indicator of divestment from equity stake in subsidiaries.
+Citation:
+Belderbos, R., & Zou, J. (2006). Foreign divestment and relocation by Japanese electronics firms in East Asia. Asian Economic Journal, 20(1), 1–27.
+
+3. Buch, Kokta, & Piazolo (2003) – "Foreign direct investment in Europe: Is there redirection from the South to the East?"
+How divestment is measured: Firm-level affiliate exit data from the Bundesbank MiDi database.
+Example: Analyzes how German firms shift FDI from Southern to Eastern Europe by closing or selling existing affiliates.
+Citation:
+Buch, C. M., Kokta, R. M., & Piazolo, D. (2003). Foreign direct investment in Europe: Is there redirection from the South to the East? Journal of Comparative Economics, 31(1), 94–109.
+
+4. Bertrand, Kramarz, Schoar, & Thesmar (2018) – "The cost of political connections in a low-corruption environment"
+How divestment is measured: Sale of politically connected subsidiaries after a change in political regime.
+Example: Used data from France to show firms divested (sold off) politically connected subsidiaries after a loss of connection, using firm-level financial and ownership data.
+Citation:
+Bertrand, M., Kramarz, F., Schoar, A., & Thesmar, D. (2018). The cost of political connections in a low-corruption environment. The Review of Economic Studies, 85(2), 611–646.
+
+5. Javorcik & Wei (2009) – "Corruption and cross-border investment in emerging markets"
+How divestment is measured: Exits of foreign affiliates due to corruption risks.
+Example: Uses firm-level data to identify affiliate closures or ownership withdrawals as a response to institutional quality.
+Citation:
+Javorcik, B. S., & Wei, S.-J. (2009). Corruption and cross-border investment in emerging markets. Journal of International Money and Finance, 28(4), 605–624.
+
+
+
+# May 7, 2025
+
+- I included the results using the imputed data.
+
+- To address the following comments by the JIE reviewer, I am wondering whether we can use aﬃliate employment instead of changes in ownership shares as the measure of divestitures as another robustness check. 
+- I need to consider whether we can use the imputation method we used before to do the above analysis.
+
+Referee comments:
+"2. The authors measure intensive margin reductions in FDI as divestitures, i.e. changes in the Japanese ownership share of UK-based aﬃliates. I don’t have clear the mechanism whereby
+a parent firm that wants to reduce its presence in a country would change its ownership share in an aﬃliate, rather than reducing aﬃliate sales or aﬃliate employment. I don’t think
+changes in ownership shares are a common way for parent firms to change their involvement in host countries (and if they are, the authors should present evidence in support of this).
+The narrative in the paper seems to suggest that decisions about whether to operate or not are in the hands of the aﬃliate, and not of the parent. More clarity is needed in this part."
+
+
+# April 30, 2025
+
+- I included footnote 9 to cite Dhingra and Sampson (2022).
+
+- I conducted multiple imputation for affiliate employment.
+- Using the imputed data, I estimated the impact of the Brexit using the extended two-way fixed effect model (ETWFE model).
+- The results are similar with the ones where we use country-year-average for the missing values of affilaite employment.
+
+- "temp/27_ETWFE-Brexit-Affiliate-OLS-MICE-2.pdf"
+- "Imputation.tex/pdf"
+
+- During the above work, I realized that previous presentation of the ETWFE model's results in Table 2 (Impacts of Brexit. ETWFE model with covariates, OLS) is not good. Table 2 presents the estimated coefficients. 
+- However, the estimated coefficients are less meaningful in the ETWFE model due to the complicated demeaning and interactions. 
+- Instead, we need to present the marginal effects in the ETWFE model. 
+- Using the R package "etwfe", we can caluculate the marginal effects of event study coefficients but we cannot caluculate the marginal effects of the covariates.
+- I, therefore, would like to replace Table 2 with the event study plot. 
+
+
+# April 23, 2025
+
+- I wrote a rough sketch of a model of FDI with sunk costs. "FDISunkCost.tex"
+- It is based on Roberts and Tybout's classical model of export with sunk costs.
+- Can we include "FDISunkCost.tex" into the main text?
+
+Other issues raised by the referees:
+
+1. Decrease in employment as an alternative measure of divestment
+- I'd like to check whether we can use the employment variable in the OJC data instead of the ownership ratio as a robustness check. 
+
+2. How to impute the missing values in employment
+- We can reconsider how to calculate the missing values of the employment using a more sophisticated technique. 
+- The Multiple Imputation (MI) method is available via the R package "mice." 
+- I started learning how to implement the MI method.
+- Princeton University Library. Missing Data Imputation in R: Missing data R tutorial: a brief guide to handle missing data in R. https://libguides.princeton.edu/c.php?g=1391216&p=10290937#s-lg-box-wrapper-38134556
+
+3. horizontal / export-platform FDI
+- We need to check the type of FDI variable in the OJC data.
+
+
+# April 16, 2025
+
+- I included the section that analyzed the impacts of Brexit on the new entry.
+- The SDiD estimation is industy#year#country level.
+- It is preliminary and rough writing.
+
+- To reinforce the argument, I'd like to include a simple model of FDI with sunk cost that extends Roberts and Tybout's model of export.
+
+
+--------------------------------------
+
+
+# December 14, 2024
+
+- I'm afraid that the word "Japanese" might unnecessarily narrow the scope and generality of our paper.
+
+- I tried replacing "Japanese" with "foreign" or "multinational" to extend the generality of our paper.
+
+- How about "No-Exit Brexit: Multinational Firms' Exit and Divestment in UK" as the new title to delete "Japanese"?
+
+
+
+
+# December 12, 2024
+
+*********************************************************************************
+1. Main documents
+- brexit.tex 
+
+2. Title page
+- brexit_title.tex
+
+3. Tables
+- Table1_ETWFE_OLS.tex
+- Table2_ETWFE_OLS_CovariatesFull.tex
+- TableA1_countrylist.tex
+- TableA2_descriptive.tex
+- TableA3_ETWFE_OLS_Hetero.tex
+
+4. Figures
+- Fig1a-N-WN.eps
+- Fig1b-N-EU-GBR.eps
+- Fig2a_plot_exit-compare-aff.eps
+- Fig2b_plot_enter-aff-compare.eps
+- Fig3-TWFE-Exit-OLS-HighEU.eps
+- Fig4-TWFE-Ratio-OLS-HighEU.eps
+- Fig5-ETWFE-exit-logit.eps
+- Fig6_SDiD.eps
+- FigA1-map-aff-2014-2020.eps
+
+5. LaTex supplementary files
+- brexit_preamble.tex
+- brexit_ref.bib
+- ninecolors.sty  (if necessary)
+- tabularray.sty  (if necessary)
+
+6 . Supplementary files for Review: Online Appendix
+- brexit_OA.pdf (attached)
+*********************************************************************************
+
+
+# December 9, 2024
+ - I reviewed/updated all of the dated website links to ensure they still were active.
+
+
+# December 6, 2024
+- I replaced figures and table with newer ones that use data for the years: 2010--2020.
+- I included "Nonlinear DiD" subsection in the robustness check section.
+- I removed the senstivity analysis. It seems unnecessary because the revised results do not have any significant impacts of Brexit.
+
+
+# December 2, 2024
+-I added a new paragraph on extending the years of analysis to 2021 and beyond.
+- I added a bit to the conclusion regarding the UK-Japan Comprehensive Economic Partnership Agreement and other UK-EU agreements.
+
+# November 30, 2024
+- Add Panel (b) of Figure 1 which presents the number of affiliates in the UK and high-income EU countries to address Todd's comment.
+- The country list in the Appendix is slightly modified.
+- I modified the references (ref.bib) to fix errors.
+
+1. Can we exclude the lower-income EU countries from the results? High-income countries are a more suitable comparison group of the UK.
+    - When we restrict our comparison countries to the high-income EU countries, we tend to obtain more consistent results. We are able to defend the robustness of our results more easily.
+2. Can we restrict the estimation period to 2010-2014 and 2016-2020 by excluding 2021? 
+    The UK officially left the EU in January 2020. The pandemic also began in 2020. The Japan-UK agreement was signed in 2020. Too many events occurred in 2020, making the interpretation of 2021 results more difficult.
+
+3. (Future) Can we estimate the Poisson DiD model using a country-level number of exits as the dependent variable? It allows us to defend the robustness of our results.
+
+**Timeline of Brexit**
+- Brexit referendum (2016)
+- Brexit (January 2020)
+    - The withdrawal agreement was ratified by the UK on 23 January and by the EU on 30 January; it came into force on 31 January 2020. 
+- Pandemic (January 2020)
+- the Japan-UK Comprehensive Economic Partnership Agreement (December 2020)
+    - The agreement was agreed in principle by both parties in September 2020 and signed in Tokyo in October 2020, following the United Kingdom's withdrawal from the European Union in January 2020. It entered into force at the end of the transition period on 31 December 2020.
+- The transition period ends (December 2020).
+
+- Potential journals
+* Oxford Economic Papers: https://academic.oup.com/oep
+* Oxford Bulletin of Economics and Statistics: https://onlinelibrary.wiley.com/journal/14680084
+* Economica: https://onlinelibrary.wiley.com/journal/14680335
+* European Economic Review: https://www.sciencedirect.com/journal/european-economic-review
+
+
+
+# November 19, 2024
+- Add the methodological description in the introduction section.
+
+#Mike Note - Nov 13
+- I gave the paper to my former grad student. Here were his quick thoughts
+1) Page 9 - eliminate "XXX" in the list of countries 
+2) First paragraph, page 2 - since debate on Brexit is pre-Brexit, is there an announcment effect? Link to Fig 1 and 2 here? 
+3) Related to (2), can we say on page 11 (equation 3) that we assume no anticipatory effects? Or, can we say that, given the results from Figure 1 and 2? Do we want to refer back to Figure 1 and 2 here to support that assumption? 
+4) Better explain Figure 6 - what are the four lines (only 2 are listed in the legend) and what is the shaded area on the bottom left? 
+5) Conclusion - eliminate "into Germany" - opens up some questions. Likewise, could we create a different Figure 1 that shows investment into UK vs EU rather than just Germany?
+6)"upping sticks" was this a credible threat? do we want to ask that question in the intro, and then refer back to it in the conclusion as it was clearly not a credible threat in the aggregate 
+7) Related to Footnote 17 - why is linear probability the preferred choice? Feasible Least Squares?  We may need to write something about why we chose linear probability here (just to defend against referee comment.)  
+8) Equation 1 uses 2014 but equation 3 uses 2016. And the Figures 3 and 4 use 2014 as the break? Why? It does say why in the paper. 
+9) Why stop at 2021, especially since 2020 was the year Brexit officially occurred? Can we go any farther? Should we mention anything in the conclusion on this?
+
+# November 13, 2024
+
+- I included tables of country lists and descriptive statistics in the Appendix.
+
+- I revised the equation (1) to make it clearer.
+
+- I include Becker et al. (2017) and Alabrese et al. (2019) to defend the no anticipatory effects assumption.
+
+Can we remove the data after 2021? This helps us identify the impacts of the referendum.
+
+# November 6, 2024
+- I included the "Heterogeneous treatment effects" section in the Appendix.
+- I wrote the text for the location maps of Japanese affiliates in the Appendix.
+- I moved the Cox regression results and others to the Online Appendix.
+- I wrote the text for the Online Appendix.
+- I revised the data periods from 1990--2021 to 2010 to 2021 because I finally used the years 2010 to 2021 in the main regressions.
+
+- I will have to revise the KM plots using the data from 2010 to 2021. Or can we remove them? I now think the KM plots are a bit awkward in the paper because the main analysis is based on simple OLS. 
+
+- I will need to provide descriptive statistics that compare affiliates in the UK with those in other countries.
+
+- Guest house information:
+https://drive.google.com/drive/folders/14H-K0a7jaxAg9kaUQcCKlBB9fDgoYojV?usp=sharing
+
+
+# October 30, 2024
+- I included the "Sensitivity analysis" subsection based on Roth's sensitivity analysis.
+    - https://github.com/asheshrambachan/HonestDiD
+- I included the subsection of synthetic DiD.
+- I included results of the ETWFE model with time-constant controls.
+    - Wooldridge (2021) equation (5.15). https://dx.doi.org/10.2139/ssrn.3906345
+
+- I'm considering further robustness check.
+    - Use the ETWFE model to check the "Heterogeneous treatment effects" between manufacturing and non-manufacturing. https://grantmcdermott.com/etwfe/articles/etwfe.html#heterogeneous-treatment-effects
+
+
+# October 23, 2024
+
+- I rewrote the Result section to incorporate the revised results. 
+- The TWFE and ETWFE models produce similar results.
+- To focus on the affiliate level, I removed several figures that analyzed the parent level in the Appendix.
+- I'm considering robustness checks. 
+    - ETWFE model with covariates might control for covariate-specific treatment heterogeneity (e.g., larger affiliates tended to have a larger impact?). 
+    - Synthetic DiD which is robust to violation of parallel trends assumption.
+    - Roth's sensitivity analysis that we did for the Korean project.
+
+
+# October 16, 2024
+
+- I estimated the exit probability using the balanced affiliate panel data.
+- The data now contains the affiliates exited even after their exit by coding exit=1.
+- I use a simple two-way fixed effects model (affiliate fixed effects & year fixed effects). OLS works, while logit doesn't work.
+- I also use Wooldridge's extended two-way fixed effects model. Both OLS and logit work.
+- I use a subsample of EU countries, high-income EU countries, and OECD countries excluding EU countries.
+- I obtained various results. So, I need to think about which specification/sample is better for identification.
+- Results are reported in "13b_TWFE-Brexit-Affiliate.pdf" of the "temp" directory.
+
+
+# October 6, 2024
+- I need to improve the empirical specifications of the Brexit project.
+- In the current specifications (1) and (2), the exiting affiliates disappear in the estimation sample after their exiting timing. It results in a higher fraction of surviving affiliates in the estimation sample. I'm afraid that this sample selection can produce biased estimates of Brexit due to the underrepresentation of affiliates exiting.
+- In addition, the specifications (1) and (2) include time-varying covariates. It can induce the bad control problems. In principle, we can only include pretreatment covariates in a canonical DiD settings.
+- Given these issues, I need to use the balanced panel of affilaites and Wooldrigde's extended two-way fixed effects (ETWFE) model to conduct DiD regression. The balanced panel of affiliates includes affiliates exiting even after their exits.
+
+Example of the currrent data:
+Year:        2014, 2016, 2018     
+Affiliate A: survive,  survive, survive
+Affiliate B: survive,  exit, *missing*
+
+Example of the balanced data:
+Year:        2014, 2016, 2018     
+Affiliate A: survive,  survive, survive
+Affiliate B: survive,  survive, *exit*
+
+
+
+# October 1, 2024
+- I read Belderbos1 and Zou (2009). The concept of the hysteresis of FDI is useful for our paper.
+- I found related literature:
+- Milas, C., Panagiotidis, T., & Papapanagiotou, G. (2024). UK Foreign Direct Investment in uncertain economic times. Journal of International Money and Finance, 147, 103132.
+https://doi.org/10.1016/j.jimonfin.2024.103132
+
+- McGrattan, E. R., & Waddle, A. (2020). The impact of Brexit on foreign investment and production. American Economic Journal: Macroeconomics, 12(1), 76-103.
+
+- Broadbent, B., Di Pace, F., Drechsel, T., Harrison, R., & Tenreyro, S. (2024). The Brexit Vote, Productivity Growth, and macroeconomic adjustments in the UK. Review of Economic Studies, 91(4), 2104-2134. https://doi.org/10.1093/restud/rdad086
+
+- Frenkel, M., & Stefan, H. (2024). The impact of the Brexit referendum on greenfield foreign direct investments from countries within and outside the European single market. Applied Economics Letters, 31(12), 1125-1128.
+
+- I almost forget the R codes for this project. I need to re-understand them.
+
+# July 3, 2024
+- I modified the estimation tables in minor points.
+- I included Figure A2 (Affiliate size of exiting affiliates).
+- I tried the logit model and found that the logit model produced meaningless estimates because it resulted in a large decrease in the number of observations. 
+
+# June 29, 2024
+- I revised Figure A1: Number of Japanese parent firms exiting from the UK.
+
+
+# June 28, 2024
+- This paper focuses on the behavior of incumbent affiliates.
+- We found little evidence that Brexit impacted the survival of Japanese affiliates in the UK.
+- Nevertheless, Figure 1 shows that the number of UK affiliates has decreased when compared to Germany.
+- We will need to examine the impact of Brexit on new entry into the UK.
+
+
+# June 27, 2024
+- I included a map that shows the location of Japanese affiliates in Europe.
+- I included a figure to show the number of firms and affiliates exiting the UK by sector
+
+# June 24, 2024
+- I revised the explanation of the event-study results.
+- I added ".sty" files which are necessary to compile LaTex in an offline environment. They came from CTAN (The Comprehensive TEX Archive Network).
+
+
+# June 20, 2024
+- Following Mike's suggestion, I revised the KM survival curve.
+- I moved the description of estimation equations to the new section "Empirical method" and left empirical results in the results section.
+- Previous versions included non-EU countries in the estimation. The current version includes EU countries and the UK only.
+- Following Mike's suggestion, I included affiliate sector fixed effects in affiliate-level regressions.
+
+
+# June 14, 2024
+- I included event study plots to estimate the dynamic impacts of Brexit on the Japanese ownership ratio.
+- The impacts are statistically insignificant.
+- I revised the estimation equations. 
+    - I followed Callaway's (2023) notations.
+    - Callaway, B. (2023). Difference-in-differences for policy evaluation. Handbook of Labor, Human Resources and Population Economics, 1-61.
+- I revised notations of fixed effects terms in the estimation tables.
+
+
+# June 7, 2024
+- I roughly wrote the bullet points on the data and preliminary analysis section.
+- I don't know where to place the Cox regression results but I temporarily placed them in the data and preliminary analysis section as well as the Appendix.
+    - The Cox proportional test failed. We cannot rely on the Cox regression results.
+    - The Cox model did not have affiliate/parent firm fixed effects. Therefore, it could not control for parent firm/affiliate characteristics.
+- I wrote the bullet points on the result of the two-way fixed effects model of the affiliate/parent firm exit.
+- Following Mike's suggestion, I replaced the results of the two-way fixed effects model using ownership ratio as the dependent variable with those using the balanced sample, namely the sample of surviving firms/affiliates. 
+- In the two-way fixed effects model, we can control time-invariant firm characteristics by using affiliate/parent firm fixed effects.
+- Thus, we avoid including parent firm variables such as productivity. 
+    - TFP estimation is time-consuming.
+    - Merging the OJC data with parent firms' productivity and other variables from the DBJ data would result in a reduction in the number of observations.
+    - Including more parent firm variables is an agenda for a future study.
+    
+
+#Mike comments
+I am looking for good quotes from Shakespeare - "Much Ado About Nothing"  since there was so much written/discussed/concern about Brexit, yet its impact has been limited
+
+# May 30, 2024
+I have edited the Brexit project on the Overleaf in several ways.
+
+-  Including new regression results, especially parent-level regressions.
+-  Replacing figures made by Stata with those made by R. The results have slightly changed presumably due to my Stata mistakes. 
+-  Moving older contents to the “Oldversion” folder. 
+- Cleaning the “brexit.tex” by moving the preamble into the “Preamble.tex"
+- All R codes are in the “rstudio-export” folder. 
+- Moving the two-way fixed effect section to the appendix.
+
+The regression results suggest that Brexit had no impact on the exit of Japanese affiliates. However, more robustness checks might be necessary. 
+
+
+# May 29, 2024
+The Cox proportional test produces the following errors.
+```
+    cox1_ph_test <- survival::cox.zph(cox1) 
+    Error in solve.default(imat, u) : 
+      system is computationally singular: reciprocal condition number = 2.98011e-17
+```
+      
+The page below suggests that the error is related to the correlation between covariates, especially dummy variables. Our high dimensional fixed effects might prevent the Cox proportional tests.
+- https://stats.stackexchange.com/questions/460240/error-system-is-computationally-singular-when-running-cox-zph-for-a-cox-model

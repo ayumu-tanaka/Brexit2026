@@ -1,0 +1,247 @@
+---
+title: "新規参入データの作成"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+# 新規参入の定義
+
+- データに初めて現れる年を参入年として扱う。
+- 現地法人レベルでは、現地法人が初めて現れる年を参入年とする。
+- 親会社レベルでは、親会社が当該国に初めて現れる年を参入年とする。
+- データは1990年から2022年までの隔年パネルである。
+- 1990年はデータの始点であり、それ以前から存在していた個体と1990年に参入した個体を識別できないため、1990年を参入年として扱わない。
+- 結果として、1992年から2022年までの参入件数を格納したデータセットを作成する。
+
+# パッケージの読み込み
+
+```{r load-package}
+library(dplyr)
+library(rio)
+library(data.table)
+```
+
+# データの読み込み
+
+## 入力データ
+
+- `../../03_data_output/Affiliate/affiliate_panel_survival_ready.dta`
+
+## 出力データ
+
+- `../../03_data_output/Affiliate/affiliate_entry_count_country_industry_year.dta`
+- `../../03_data_output/Affiliate/affiliate_entry_count_country_year.dta`
+- `../../03_data_output/EntryExit/parent_entry_count_country_industry_year.dta`
+- `../../03_data_output/EntryExit/parent_entry_count_country_year.dta`
+- `../../03_data_output/EntryExit/entry_count_country_industry_year.dta`
+- `../../03_data_output/EntryExit/entry_count_country_year.dta`
+
+```{r load-data-package}
+aff <- rio::import("../../03_data_output/Affiliate/affiliate_panel_survival_ready.dta")
+```
+
+- 年次の分布を確認
+
+```{r check-years}
+table(aff$year)
+```
+
+# 現地法人レベルの参入年データ作成
+
+## 初出年の抽出
+
+```{r keep-first-year}
+aff_first <- aff %>% 
+  group_by(AffiliateCode) %>% 
+  filter(year == min(year)) %>% 
+  ungroup() %>%
+  filter(year > 1990)
+```
+
+## 産業×国×参入年への集計
+
+```{r collapse-data-tidyverse-sector}
+collapseIndustry <- aff_first %>%
+  group_by(year, iso, FA_SectorCode2009) %>%
+  summarise(N               = n(),                          # 新規参入子会社数
+            EU              = first(EU_all),                # EU加盟国ダミー
+            meanratio       = mean(Ratio, na.rm = TRUE),    # 出資比率の平均
+            WN              = sum(Ratio),                   # 出資比率の合計
+            GDP_PPP         = first(GDP_PPP),               # 購買力平価GDP（国レベル、同一国内で同値）
+            GDP_per_capita  = first(GDP_per_capita),        # 一人当たりGDP（国レベル）
+            Dist            = first(Dist),                  # 日本からの距離（国レベル、時不変）
+            Aff_size_median = median(Aff_size, na.rm = TRUE), # 新規参入子会社の規模中央値
+            .groups = "drop")
+
+# データの保存
+rio::export(collapseIndustry, "../../03_data_output/Affiliate/affiliate_entry_count_country_industry_year.dta")
+```
+
+## 国×参入年への集計
+
+```{r collapse-data-tidyverse}
+collapse <- aff_first %>% 
+  group_by(year, iso) %>% 
+  summarise(N = n(), 
+            EU = first(EU_all),
+            meanratio = mean(Ratio, na.rm = TRUE),
+            WN = sum(Ratio),
+            .groups = "drop")
+
+# データの保存
+rio::export(collapse, "../../03_data_output/Affiliate/affiliate_entry_count_country_year.dta")
+```
+
+# 親会社レベルの参入年データ作成
+
+## 親会社×国×年パネルの作成
+
+```{r create-parent-country-year-panel}
+# 現地法人パネルを親会社・国・年単位に畳み込む
+parent <- as.data.table(aff)[
+  ,
+  .(
+    N_Aff = .N,
+    Ratio = mean(Ratio, na.rm = TRUE),
+    Parent_SectorCode = Parent_SectorCode[1L],
+    Parent_SectorName = Parent_SectorName[1L],
+    Parent_SectorClass = Parent_SectorClass[1L],
+    Parent_SectorClassNameAlph = Parent_SectorClassNameAlph[1L],
+    Aff_size = sum(Aff_size, na.rm = TRUE),
+    EU = EU[1L],
+    EU_all = EU_all[1L],
+    countryname = countryname[1L],
+    GDP_PPP = GDP_PPP[1L],
+    GDP_per_capita = GDP_per_capita[1L],
+    Dist = Dist[1L]
+  ),
+  by = .(JPCode, iso, year)
+] %>%
+  as_tibble()
+```
+
+## 初出年の抽出
+
+```{r keep-first-year-parent}
+parent_first <- parent %>%
+  group_by(JPCode, iso) %>%
+  filter(year == min(year)) %>%
+  ungroup() %>%
+  filter(year > 1990)
+```
+
+## 産業×国×参入年への集計
+
+```{r collapse-parent-data-sector}
+parent_collapse_industry <- parent_first %>%
+  group_by(year, iso, Parent_SectorCode) %>%
+  summarise(
+    N               = n(),                          # 新規参入親会社数
+    EU              = first(EU_all),                # EU加盟国ダミー
+    meanratio       = mean(Ratio, na.rm = TRUE),    # 出資比率の平均
+    WN              = sum(Ratio, na.rm = TRUE),     # 出資比率の合計
+    GDP_PPP         = first(GDP_PPP),               # 購買力平価GDP（国レベル、同一国内で同値）
+    GDP_per_capita  = first(GDP_per_capita),        # 一人当たりGDP（国レベル）
+    Dist            = first(Dist),                  # 日本からの距離（国レベル、時不変）
+    Aff_size_median = median(Aff_size, na.rm = TRUE), # 新規参入親会社が持つ現地法人数規模の中央値
+    .groups = "drop"
+  )
+
+# データの保存
+rio::export(parent_collapse_industry, "../../03_data_output/EntryExit/parent_entry_count_country_industry_year.dta")
+```
+
+## 国×参入年への集計
+
+```{r collapse-parent-data}
+parent_collapse <- parent_first %>%
+  group_by(year, iso) %>%
+  summarise(
+    N = n(),
+    EU = first(EU_all),
+    meanratio = mean(Ratio, na.rm = TRUE),
+    WN = sum(Ratio, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# データの保存
+rio::export(parent_collapse, "../../03_data_output/EntryExit/parent_entry_count_country_year.dta")
+```
+
+# 親会社・現地法人レベルを統合した参入件数データ
+
+```{r combine-parent-affiliate-entry-data}
+entry_count_country_industry_year <- bind_rows(
+  collapseIndustry %>%
+    transmute(
+      firm_level = "affiliate",
+      year,
+      iso,
+      SectorCode = FA_SectorCode2009,
+      N,
+      EU,
+      meanratio,
+      WN,
+      GDP_PPP,
+      GDP_per_capita,
+      Dist,
+      Aff_size_median
+    ),
+  parent_collapse_industry %>%
+    transmute(
+      firm_level = "parent",
+      year,
+      iso,
+      SectorCode = Parent_SectorCode,
+      N,
+      EU,
+      meanratio,
+      WN,
+      GDP_PPP,
+      GDP_per_capita,
+      Dist,
+      Aff_size_median
+    )
+) %>%
+  arrange(firm_level, iso, SectorCode, year)
+
+entry_count_country_year <- bind_rows(
+  collapse %>%
+    transmute(
+      firm_level = "affiliate",
+      year,
+      iso,
+      N,
+      EU,
+      meanratio,
+      WN
+    ),
+  parent_collapse %>%
+    transmute(
+      firm_level = "parent",
+      year,
+      iso,
+      N,
+      EU,
+      meanratio,
+      WN
+    )
+) %>%
+  arrange(firm_level, iso, year)
+
+rio::export(entry_count_country_industry_year, "../../03_data_output/EntryExit/entry_count_country_industry_year.dta")
+rio::export(entry_count_country_year, "../../03_data_output/EntryExit/entry_count_country_year.dta")
+```

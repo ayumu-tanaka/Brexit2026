@@ -1,0 +1,134 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  This bbl file is created by econ-aea.bst ver.3.3
+%  The latest econ-aea.bst is available at
+%  <https://github.com/ShiroTakeda/econ-bst>
+
+\begin{thebibliography}{xxx}
+
+\harvarditem[Alabrese et~al.]{Alabrese, Becker, Fetzer, and Novy}{2019}{alabrese_who_2019}
+\textbf{Alabrese, Eleonora, Sascha~O. Becker, Thiemo Fetzer, and Dennis Novy.} 2019. ``Who voted for {B}rexit? Individual and regional data combined.'' \textit{European Journal of Political Economy} 56  132--150. \href{https://doi.org/10.1016/j.ejpoleco.2018.08.002}{\urlstyle{tt}\nolinkurl{10.1016/j.ejpoleco.2018.08.002}}.
+
+\harvarditem[Arkhangelsky et~al.]{Arkhangelsky, Athey, Hirshberg, Imbens, and Wager}{2021}{arkhangelsky2021synthetic}
+\textbf{Arkhangelsky, Dmitry, Susan Athey, David~A. Hirshberg, Guido~W. Imbens, and Stefan Wager.} 2021. ``Synthetic difference-in-differences.'' \textit{American Economic Review} 111 (12):   4088--4118. \href{https://doi.org/10.1257/aer.20190159}{\urlstyle{tt}\nolinkurl{10.1257/aer.20190159}}.
+
+\harvarditem[Becker et~al.]{Becker, Fetzer, and Novy}{2017}{becker_who_2017}
+\textbf{Becker, Sascha~O., Thiemo Fetzer, and Dennis Novy.} 2017. ``Who voted for {B}rexit? A comprehensive district-level analysis.'' \textit{Economic Policy} 32 (92):   601--650. \href{https://doi.org/10.1093/epolic/eix012}{\urlstyle{tt}\nolinkurl{10.1093/epolic/eix012}}.
+
+\harvarditem[Belderbos et~al.]{Belderbos, De~Michiel, Sleuwaegen, and Wu}{2021}{Bederbos2021}
+\textbf{Belderbos, Ren{\'e}, Federico De~Michiel, Leo Sleuwaegen, and Shubin Wu.} 2021. ``Global market integration, efficiency orientation, and drivers of foreign subsidiary divestments.'' \textit{Journal of World Business} 56 (5):  101228. \href{https://doi.org/10.1016/j.jwb.2021.101228}{\urlstyle{tt}\nolinkurl{10.1016/j.jwb.2021.101228}}.
+
+\harvarditem[Belderbos et~al.]{Belderbos, Tong, and Wu}{2019}{belderbos2017multinational}
+\textbf{Belderbos, Ren{\'e}, Tony~W. Tong, and Shubin Wu.} 2019. ``Multinational investment and the value of growth options: Alignment of incremental strategy to environmental uncertainty.'' \textit{Strategic Management Journal} 40 (1):   127--152. \href{https://doi.org/10.1002/smj.2969}{\urlstyle{tt}\nolinkurl{10.1002/smj.2969}}.
+
+\harvarditem[Berge et~al.]{Berge, Krantz, McDermott, and Lenth}{2024}{fixest}
+\textbf{Berge, Laurent, Sebastian Krantz, Grant McDermott, and Russell Lenth.} 2024.  \textit{fixest: Fast Fixed-Effects Estimations}. \href{https://doi.org/10.32614/CRAN.package.fixest}{\urlstyle{tt}\nolinkurl{10.32614/CRAN.package.fixest}}, R package version 0.12.1.
+
+\harvarditem[Bloom et~al.]{Bloom, Bunn, Chen, Mizen, Smietanka, Thwaites, and Young}{2018}{bloom2018brexit}
+\textbf{Bloom, Nicholas, Philip Bunn, Scarlet Chen, Paul Mizen, Pawel Smietanka, Gregory Thwaites, and Garry Young.} 2018. ``{B}rexit and uncertainty: Insights from the decision maker panel.'' \textit{Fiscal Studies} 39 (4):   555--580. \href{https://doi.org/10.1111/1475-5890.12179}{\urlstyle{tt}\nolinkurl{10.1111/1475-5890.12179}}.
+
+\harvarditem[Bloom et~al.]{Bloom, Bunn, Mizen, Smietanka, and Thwaites}{2025}{bloom2025economic}
+\textbf{Bloom, Nicholas, Philip Bunn, Paul Mizen, Pawel Smietanka, and Gregory Thwaites.} 2025. ``The economic impact of {B}rexit.'' technical report, National Bureau of Economic Research. \href{https://doi.org/10.3386/w34459}{\urlstyle{tt}\nolinkurl{10.3386/w34459}}.
+
+\harvarditem[Born et~al.]{Born, M{\"u}ller, Schularick, and Sedl{\'a}{\v c}ek}{2019}{born2019}
+\textbf{Born, Benjamin, Gernot~J M{\"u}ller, Moritz Schularick, and Petr Sedl{\'a}{\v c}ek.} 2019. ``The costs of economic nationalism: evidence from the {B}rexit experiment.'' \textit{The Economic Journal} 129 (623):   2722--2744. \href{https://doi.org/10.1093/ej/uez020}{\urlstyle{tt}\nolinkurl{10.1093/ej/uez020}}.
+
+\harvarditem[Breinlich et~al.]{Breinlich, Leromain, Novy, and Sampson}{2020}{breinlich2020}
+\textbf{Breinlich, Holger, Elsa Leromain, Dennis Novy, and Thomas Sampson.} 2020. ``Voting with their money: {B}rexit and outward investment by {UK} firms.'' \textit{European Economic Review} 124 103400. \href{https://doi.org/10.1016/j.euroecorev.2020.103400}{\urlstyle{tt}\nolinkurl{10.1016/j.euroecorev.2020.103400}}.
+
+\harvarditem[Callaway]{Callaway}{2023}{callaway2023difference}
+\textbf{Callaway, Brantly.} 2023. ``Difference-in-differences for policy evaluation.'' \textit{Handbook of Labor, Human Resources and Population Economics}  1--61. \href{https://doi.org/10.1007/978-3-319-57365-6_352-1}{\urlstyle{tt}\nolinkurl{10.1007/978-3-319-57365-6_352-1}}.
+
+\harvarditem[Cie{\'s}lik and Ryan]{Cie{\'s}lik and Ryan}{2022}{cieslik2022brexit}
+\textbf{Cie{\'s}lik, Andrzej, and Michael Ryan.} 2022. ``{B}rexit and {J}apanese foreign direct investment in the {UK}: A sectoral analysis.'' \textit{Oxford Economic Papers} 74 (4):   959--975. \href{https://doi.org/10.1093/oep/gpac004}{\urlstyle{tt}\nolinkurl{10.1093/oep/gpac004}}.
+
+\harvarditem[Das et~al.]{Das, Roberts, and Tybout}{2007}{das2007market}
+\textbf{Das, Sanghamitra, Mark~J. Roberts, and James~R. Tybout.} 2007. ``Market entry costs, producer heterogeneity, and export dynamics.'' \textit{Econometrica} 75 (3):   837--873. \href{https://doi.org/10.1111/j.1468-0262.2007.00769.x}{\urlstyle{tt}\nolinkurl{10.1111/j.1468-0262.2007.00769.x}}.
+
+\harvarditem[De~Chaisemartin and d'Haultfoeuille]{De~Chaisemartin and d'Haultfoeuille}{2020}{de2020two}
+\textbf{De~Chaisemartin, Cl{\'e}ment, and Xavier d'Haultfoeuille.} 2020. ``Two-way fixed effects estimators with heterogeneous treatment effects.'' \textit{American Economic Review} 110 (9):   2964--2996. \href{https://doi.org/10.1257/aer.20181169}{\urlstyle{tt}\nolinkurl{10.1257/aer.20181169}}.
+
+\harvarditem[Dhingra and Sampson]{Dhingra and Sampson}{2022}{dhingra2022expecting}
+\textbf{Dhingra, Swati, and Thomas Sampson.} 2022. ``Expecting {B}rexit.'' \textit{Annual Review of Economics} 14 (1):   495--519. \href{https://doi.org/10.1146/annurev-economics-051420-104231}{\urlstyle{tt}\nolinkurl{10.1146/annurev-economics-051420-104231}}.
+
+\harvarditem[Dixit]{Dixit}{1992}{dixit1992}
+\textbf{Dixit, Avinash.} 1992. ``Investment and hysteresis.'' \textit{Journal of Economic Perspectives} 6 (1):   107--132. \href{https://doi.org/10.1257/jep.6.1.107}{\urlstyle{tt}\nolinkurl{10.1257/jep.6.1.107}}.
+
+\harvarditem[Fern{\'a}ndez-Val]{Fern{\'a}ndez-Val}{2009}{fernandez2009fixed}
+\textbf{Fern{\'a}ndez-Val, Iv{\'a}n.} 2009. ``Fixed effects estimation of structural parameters and marginal effects in panel probit models.'' \textit{Journal of Econometrics} 150 (1):   71--85. \href{https://doi.org/10.1016/j.jeconom.2009.02.007}{\urlstyle{tt}\nolinkurl{10.1016/j.jeconom.2009.02.007}}.
+
+\harvarditem[Fern{\'a}ndez-Val and Weidner]{Fern{\'a}ndez-Val and Weidner}{2018}{fernandez2018fixed}
+\textbf{Fern{\'a}ndez-Val, Iv{\'a}n, and Martin Weidner.} 2018. ``Fixed effects estimation of large-{T} panel data models.'' \textit{Annual Review of Economics} 10 (1):   109--138. \href{https://doi.org/10.1146/annurev-economics-080217-053542}{\urlstyle{tt}\nolinkurl{10.1146/annurev-economics-080217-053542}}.
+
+\harvarditem[Freyaldenhoven et~al.]{Freyaldenhoven, Hansen, P{\'e}rez, and Shapiro}{2021}{frey2021}
+\textbf{Freyaldenhoven, Simon, Christian Hansen, Jorge~P{\'e}rez P{\'e}rez, and Jesse~M. Shapiro.} 2021. ``Visualization, identification, and estimation in the linear panel event-study design.'' Working Paper 29170, National Bureau of Economic Research. \href{https://doi.org/10.3386/w29170}{\urlstyle{tt}\nolinkurl{10.3386/w29170}}.
+
+\harvarditem[Garetto et~al.]{Garetto, Oldenski, and Ramondo}{2019}{garetto2019}
+\textbf{Garetto, Stefania, Lindsay Oldenski, and Natalia Ramondo.} 2019. ``Multinational Expansion in Time and Space.'' Working Paper 25804, National Bureau of Economic Research. \href{https://doi.org/10.3386/w25804}{\urlstyle{tt}\nolinkurl{10.3386/w25804}}.
+
+\harvarditem[Graziano et~al.]{Graziano, Handley, and Lim{\~a}o}{2021}{graziano2021brexit}
+\textbf{Graziano, Alessandro~Giovanni, Kyle Handley, and Nuno Lim{\~a}o.} 2021. ``{B}rexit uncertainty and trade disintegration.'' \textit{The Economic Journal} 131 (635):   1150--1185. \href{https://doi.org/10.1093/ej/ueaa113}{\urlstyle{tt}\nolinkurl{10.1093/ej/ueaa113}}.
+
+\harvarditem[Handley and Lim{\~a}o]{Handley and Lim{\~a}o}{2015}{handley2015trade}
+\textbf{Handley, Kyle, and Nuno Lim{\~a}o.} 2015. ``Trade and investment under policy uncertainty: Theory and firm evidence.'' \textit{American Economic Journal: Economic Policy} 7 (4):   189--222. \href{https://doi.org/10.1257/pol.20140068}{\urlstyle{tt}\nolinkurl{10.1257/pol.20140068}}.
+
+\harvarditem[Hayati~Rezvan et~al.]{Hayati~Rezvan, Lee, and Simpson}{2015}{hayati2015rise}
+\textbf{Hayati~Rezvan, Panteha, Katherine~J. Lee, and Julie~A. Simpson.} 2015. ``The rise of multiple imputation: A review of the reporting and implementation of the method in medical research.'' \textit{BMC Medical Research Methodology} 15  1--14. \href{https://doi.org/10.1186/s12874-015-0022-1}{\urlstyle{tt}\nolinkurl{10.1186/s12874-015-0022-1}}.
+
+\harvarditem[Head and Mayer]{Head and Mayer}{2021}{head2021united}
+\textbf{Head, Keith, and Thierry Mayer.} 2021. ``The {U}nited {S}tates of {E}urope: A gravity model evaluation of the four freedoms.'' \textit{Journal of Economic Perspectives} 35 (2):   23--48. \href{https://doi.org/10.1257/jep.35.2.23}{\urlstyle{tt}\nolinkurl{10.1257/jep.35.2.23}}.
+
+\harvarditem[Hirshberg]{Hirshberg}{2024}{synthdid}
+\textbf{Hirshberg, David~A.} 2024. ``synthdid: Synthetic difference in differences estimation.'' \urlstyle{tt}\url{https://synth-inference.github.io/synthdid/}.
+
+\harvarditem[Kermani and Ma]{Kermani and Ma}{2023}{kermani2023asset}
+\textbf{Kermani, Amir, and Yueran Ma.} 2023. ``Asset specificity of nonfinancial firms.'' \textit{The Quarterly Journal of Economics} 138 (1):   205--264. \href{https://doi.org/10.1093/qje/qjac030}{\urlstyle{tt}\nolinkurl{10.1093/qje/qjac030}}.
+
+\harvarditem[Kim and Kung]{Kim and Kung}{2017}{kim2017asset}
+\textbf{Kim, Hyunseob, and Howard Kung.} 2017. ``The asset redeployability channel: How uncertainty affects corporate investment.'' \textit{The Review of Financial Studies} 30 (1):   245--280. \href{https://doi.org/10.1093/rfs/hhv076}{\urlstyle{tt}\nolinkurl{10.1093/rfs/hhv076}}.
+
+\harvarditem[Kox]{Kox}{2025}{kox2025repairing}
+\textbf{Kox, Henk L.~M.} 2025. ``Repairing a Historical Mistake in Bilateral {FDI} Statistics: A New Dataset Covering 2001--2022.'' \textit{Review of International Economics}  1--22. \href{https://doi.org/10.1111/roie.70004}{\urlstyle{tt}\nolinkurl{10.1111/roie.70004}}.
+
+\harvarditem[Kren and Lawless]{Kren and Lawless}{2024}{kren2024}
+\textbf{Kren, Janez, and Martina Lawless.} 2024. ``How has {B}rexit changed {EU--UK} trade flows?'' \textit{European Economic Review} 161 104634. \href{https://doi.org/10.1016/j.euroecorev.2023.104634}{\urlstyle{tt}\nolinkurl{10.1016/j.euroecorev.2023.104634}}.
+
+\harvarditem[Maidment]{Maidment}{2019}{maidment2019brexit}
+\textbf{Maidment, Paul.} 2019. ``{B}rexit and how {J}apanese companies are navigating its uncertainties.'' Digital Article 23, Harvard Business Review, \urlstyle{tt}\url{https://hbr.org/2019/03/brexit-and-how-japanese-companies-are-navigating-its-uncertainties}.
+
+\harvarditem[McDermott]{McDermott}{2024}{etwfe}
+\textbf{McDermott, Grant.} 2024. ``etwfe: Extended two-way fixed effects.'' \href{https://doi.org/10.32614/CRAN.package.etwfe}{\urlstyle{tt}\nolinkurl{10.32614/CRAN.package.etwfe}}.
+
+\harvarditem[Nagengast et~al.]{Nagengast, Rios-Avila, and Yotov}{2026}{nagengast2026european}
+\textbf{Nagengast, Arne~J, Fernando Rios-Avila, and Yoto~V Yotov.} 2026. ``The {European} single market and intra-{EU} trade: an assessment with heterogeneity-robust difference-in-differences methods.'' \textit{Economica} 93 (369):   298--331. \href{https://doi.org/10.1111/ecca.70018}{\urlstyle{tt}\nolinkurl{10.1111/ecca.70018}}.
+
+\harvarditem[Nagengast and Yotov]{Nagengast and Yotov}{2025}{nagengast2025staggered}
+\textbf{Nagengast, Arne~J, and Yoto~V Yotov.} 2025. ``Staggered difference-in-differences in gravity settings: Revisiting the Effects of trade greements.'' \textit{American Economic Journal: Applied Economics} 17 (1):   271--296. \href{https://doi.org/10.1257/app.20230089}{\urlstyle{tt}\nolinkurl{10.1257/app.20230089}}.
+
+\harvarditem[Norb{\"a}ck et~al.]{Norb{\"a}ck, Tekin-Koru, and Waldkirch}{2015}{norback2015}
+\textbf{Norb{\"a}ck, Pehr-Johan, Ay{\c{c}}a Tekin-Koru, and Andreas Waldkirch.} 2015. ``Multinational firms and plant divestiture.'' \textit{Review of International Economics} 23 (5):   811--845. \href{https://doi.org/10.1111/roie.12199}{\urlstyle{tt}\nolinkurl{10.1111/roie.12199}}.
+
+\harvarditem[Porto and Wierzbowska]{Porto and Wierzbowska}{2023}{porto2023}
+\textbf{Porto, Massimiliano, and Agata Wierzbowska.} 2023. ``Has {B}rexit affected employment in {J}apanese affiliates in the {UK}?'' \textit{Economic Affairs} 43 (3):   314--339. \href{https://doi.org/10.1111/ecaf.12608}{\urlstyle{tt}\nolinkurl{10.1111/ecaf.12608}}.
+
+\harvarditem[Roberts and Tybout]{Roberts and Tybout}{1997}{roberts1997decision}
+\textbf{Roberts, Mark~J., and James~R. Tybout.} 1997. ``The decision to export in {C}olombia: An empirical model of entry with sunk costs.'' \textit{American Economic Review}  545--564, \urlstyle{tt}\url{https://www.jstor.org/stable/2951363}.
+
+\harvarditem[Roth et~al.]{Roth, Sant'Anna, Bilinski, and Poe}{2023}{roth2023survey}
+\textbf{Roth, Jonathan, Pedro H.~C. Sant'Anna, Alyssa Bilinski, and John Poe.} 2023. ``What's trending in difference-in-differences? A synthesis of the recent econometrics literature.'' \textit{Journal of Econometrics} 235 (2):   2218--2244. \href{https://doi.org/10.1016/j.jeconom.2023.03.008}{\urlstyle{tt}\nolinkurl{10.1016/j.jeconom.2023.03.008}}.
+
+\harvarditem[Steinberg]{Steinberg}{2019}{steinberg2019brexit}
+\textbf{Steinberg, Joseph~B.} 2019. ``{B}rexit and the macroeconomic impact of trade policy uncertainty.'' \textit{Journal of International Economics} 117  175--195. \href{https://doi.org/10.1016/j.jinteco.2019.01.009}{\urlstyle{tt}\nolinkurl{10.1016/j.jinteco.2019.01.009}}.
+
+\harvarditem[Sun and Abraham]{Sun and Abraham}{2021}{sun2021estimating}
+\textbf{Sun, Liyang, and Sarah Abraham.} 2021. ``Estimating dynamic treatment effects in event studies with heterogeneous treatment effects.'' \textit{Journal of Econometrics} 225 (2):   175--199. \href{https://doi.org/10.1016/j.jeconom.2020.09.006}{\urlstyle{tt}\nolinkurl{10.1016/j.jeconom.2020.09.006}}.
+
+\harvarditem[Tamberi]{Tamberi}{2024}{tamberi2024export}
+\textbf{Tamberi, Nicol{\`o}.} 2024. ``Export-platform foreign direct investment and trade policy uncertainty: Evidence from {B}rexit.'' \textit{Economica} 91 (361):   33--69. \href{https://doi.org/10.1111/ecca.12495}{\urlstyle{tt}\nolinkurl{10.1111/ecca.12495}}.
+
+\harvarditem[Wooldridge]{Wooldridge}{2021}{wooldridge2021two}
+\textbf{Wooldridge, Jeffrey~M.} 2021. ``Two-way fixed effects, the two-way {M}undlak regression, and difference-in-differences estimators.'' Working Paper 3906345, {SSRN}. \href{https://doi.org/10.2139/ssrn.3906345}{\urlstyle{tt}\nolinkurl{10.2139/ssrn.3906345}}.
+
+\harvarditem[Wooldridge]{Wooldridge}{2023}{wooldridge2023simple}
+\textbf{Wooldridge, Jeffrey~M.} 2023. ``Simple approaches to nonlinear difference-in-differences with panel data.'' \textit{The Econometrics Journal} 26 (3):   C31--C66. \href{https://doi.org/10.1093/ectj/utad016}{\urlstyle{tt}\nolinkurl{10.1093/ectj/utad016}}.
+
+\end{thebibliography}

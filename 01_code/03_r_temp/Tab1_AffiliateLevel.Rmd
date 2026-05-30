@@ -1,0 +1,85 @@
+---
+title: "2x2 DiD: 現地法人レベルの分析"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rio)
+library(fixest)
+library(modelsummary)
+library(kableExtra)
+options(modelsummary_factory_latex = "kableExtra")
+options(modelsummary_factory_html = "kableExtra")
+```
+
+# データの読み込みと準備
+
+## 共通設定
+
+```{r settings}
+# 分析対象の年次
+keep_years <- seq(2010, 2020, by = 2)
+# 高所得EU諸国のリスト（対照群と英国）
+EU_HI <- c("AUT", "BEL", "DNK", "FIN", "FRA", "DEU", "IRL", "ITA", "LUX", "NLD", "SWE", "GBR")
+# 表示用の係数名のマッピング
+cm <- c(
+  "UK"             = "UK",
+  "Post_Referendum" = "Post-Referendum",
+  "UK:Post_Referendum" = "UK x Post-Referendum"
+)
+```
+
+## 現地法人レベルパネル
+
+```{r load-affiliate}
+df_affiliate <- import("../../03_data_output/Affiliate/affiliate_panel_brexit_high_income_eu_sample.dta") %>%
+  filter(country %in% EU_HI, year %in% keep_years) %>%
+  mutate(
+    UK              = as.integer(country == "GBR"),
+    Post_Referendum = as.integer(year >= 2016)
+  )
+```
+
+# 現地法人レベルの分析
+
+## 推定
+
+```{r estimation-affiliate}
+# (1) 退出ダミー（法人固定効果・年固定効果、国レベルクラスタリング）
+res_exit_affiliate <- feols(
+  exitit ~ UK:Post_Referendum | AffiliateCode + year,
+  data = df_affiliate,
+  vcov = ~country
+)
+
+# (2) 出資比率（法人固定効果・年固定効果、国レベルクラスタリング）
+res_ratio_affiliate <- feols(
+  Ratio ~ UK:Post_Referendum | AffiliateCode + year,
+  data = df_affiliate,
+  vcov = ~country
+)
+```
+
+## 結果の表示
+
+```{r summary-affiliate}
+models_affiliate <- list(
+  "Exit Dummy"      = res_exit_affiliate,
+  "Ownership Ratio" = res_ratio_affiliate
+)
+
+modelsummary(models_affiliate,
+             output = "markdown",
+             stars = TRUE,
+             fmt = 3,
+             gof_omit = "Log.Lik.|Pseudo.R2|AIC|BIC",
+             coef_map = cm)
+```

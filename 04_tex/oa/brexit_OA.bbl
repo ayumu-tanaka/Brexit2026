@@ -1,0 +1,12 @@
+\ifx\undefined\bysame
+\newcommand{\bysame}{\leavevmode\hbox to\leftmargin{\hrulefill\,\,}}
+\fi
+\begin{thebibliography}{xx}
+
+\harvarditem[Cox]{Cox}{1972}{cox1972regression}
+{\bf Cox, David~R.}, ``Regression models and life-tables,'' {\it Journal of the Royal Statistical Society: Series B (Methodological)}, 1972, {\it 34} (2), 187--202.
+
+\harvarditem[Kox]{Kox}{2025}{kox2025repairing}
+{\bf Kox, Henk L.~M.}, ``Repairing a Historical Mistake in Bilateral {FDI} Statistics: A New Dataset Covering 2001--2022,'' {\it Review of International Economics}, 2025, pp.~1--22.
+
+\end{thebibliography}

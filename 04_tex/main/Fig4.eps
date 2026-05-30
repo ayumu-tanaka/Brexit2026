@@ -1,0 +1,402 @@
+%!PS-Adobe-3.0
+%%DocumentNeededResources: font Helvetica
+%%+ font Helvetica-Bold
+%%+ font Helvetica-Oblique
+%%+ font Helvetica-BoldOblique
+%%+ font Symbol
+%%DocumentMedia: a4 595 841 0 () ()
+%%Title: R Graphics Output
+%%Creator: R Software
+%%Pages: (atend)
+%%Orientation: Portrait
+%%BoundingBox: 18 205 577 637
+%%EndComments
+%%BeginProlog
+/bp  { gs sRGB gs } def
+% begin .ps.prolog
+/gs  { gsave } bind def
+/gr  { grestore } bind def
+/ep  { showpage gr gr } bind def
+/m   { moveto } bind def
+/l  { rlineto } bind def
+/np  { newpath } bind def
+/cp  { closepath } bind def
+/f   { fill } bind def
+/o   { stroke } bind def
+/c   { newpath 0 360 arc } bind def
+/r   { 4 2 roll moveto 1 copy 3 -1 roll exch 0 exch rlineto 0 rlineto -1 mul 0 exch rlineto closepath } bind def
+/p1  { stroke } bind def
+/p2  { gsave bg fill grestore newpath } bind def
+/p3  { gsave bg fill grestore stroke } bind def
+/p6  { gsave bg eofill grestore newpath } bind def
+/p7  { gsave bg eofill grestore stroke } bind def
+/t   { 5 -2 roll moveto gsave rotate
+       1 index stringwidth pop
+       mul neg 0 rmoveto show grestore } bind def
+/ta  { 4 -2 roll moveto gsave rotate show } bind def
+/tb  { 2 -1 roll 0 rmoveto show } bind def
+/cl  { grestore gsave newpath 3 index 3 index moveto 1 index
+       4 -1 roll lineto  exch 1 index lineto lineto
+       closepath clip newpath } bind def
+/rgb { setrgbcolor } bind def
+/s   { scalefont setfont } bind def
+% end   .ps.prolog
+/sRGB { [ /CIEBasedABC
+          << /DecodeLMN
+               [ { dup 0.03928 le
+                        {12.92321 div}
+                        {0.055 add 1.055 div 2.4 exp }
+                     ifelse
+                 } bind dup dup
+               ]
+             /MatrixLMN [0.412457 0.212673 0.019334
+                         0.357576 0.715152 0.119192
+                         0.180437 0.072175 0.950301]
+             /WhitePoint [0.9505 1.0 1.0890]
+           >>
+         ] setcolorspace } bind def
+/srgb { setcolor } bind def
+%%IncludeResource: font Helvetica
+/Helvetica findfont
+dup length dict begin
+  {1 index /FID ne {def} {pop pop} ifelse} forall
+  /Encoding ISOLatin1Encoding def
+  currentdict
+  end
+/Font1 exch definefont pop
+%%IncludeResource: font Helvetica-Bold
+/Helvetica-Bold findfont
+dup length dict begin
+  {1 index /FID ne {def} {pop pop} ifelse} forall
+  /Encoding ISOLatin1Encoding def
+  currentdict
+  end
+/Font2 exch definefont pop
+%%IncludeResource: font Helvetica-Oblique
+/Helvetica-Oblique findfont
+dup length dict begin
+  {1 index /FID ne {def} {pop pop} ifelse} forall
+  /Encoding ISOLatin1Encoding def
+  currentdict
+  end
+/Font3 exch definefont pop
+%%IncludeResource: font Helvetica-BoldOblique
+/Helvetica-BoldOblique findfont
+dup length dict begin
+  {1 index /FID ne {def} {pop pop} ifelse} forall
+  /Encoding ISOLatin1Encoding def
+  currentdict
+  end
+/Font4 exch definefont pop
+%%IncludeResource: font Symbol
+/Symbol findfont
+dup length dict begin
+  {1 index /FID ne {def} {pop pop} ifelse} forall
+  currentdict
+  end
+/Font5 exch definefont pop
+%%EndProlog
+%%Page: 1 1
+bp
+18.00 204.94 577.28 636.94 cl
+77.04 278.38 547.04 577.90 cl
+0.7451 0.7451 0.7451 srgb
+0.75 setlinewidth
+[ 0.00 3.00] 0 setdash
+1 setlinecap
+1 setlinejoin
+10.00 setmiterlimit
+np
+77.04 286.41 m
+470.00 0 l
+o
+np
+77.04 326.84 m
+470.00 0 l
+o
+np
+77.04 367.27 m
+470.00 0 l
+o
+np
+77.04 407.70 m
+470.00 0 l
+o
+np
+77.04 448.13 m
+470.00 0 l
+o
+np
+77.04 488.56 m
+470.00 0 l
+o
+np
+77.04 528.99 m
+470.00 0 l
+o
+np
+77.04 569.42 m
+470.00 0 l
+o
+np
+94.45 278.38 m
+0 299.52 l
+o
+np
+181.48 278.38 m
+0 299.52 l
+o
+np
+268.52 278.38 m
+0 299.52 l
+o
+np
+355.56 278.38 m
+0 299.52 l
+o
+np
+442.59 278.38 m
+0 299.52 l
+o
+np
+529.63 278.38 m
+0 299.52 l
+o
+0 0 0 srgb
+0.75 setlinewidth
+[] 0 setdash
+np
+77.04 407.70 m
+470.00 0 l
+o
+18.00 204.94 577.28 636.94 cl
+/Font2 findfont 14 s
+0 0 0 srgb
+147.12 602.40 (Eff) 0 ta
+-0.140 (ect of the Bre) tb
+-0.210 (xit ref) tb
+-0.140 (erendum on e) tb
+-0.210 (xit pr) tb
+-0.280 (obability) tb gr
+/Font1 findfont 12 s
+221.66 223.66 (OLS. T) 0 ta
+-1.440 (w) tb
+-0.120 (o-y) tb
+-0.240 (ear e) tb
+-0.360 (v) tb
+-0.300 (ent-study bins) tb
+-0.180 (.) tb gr
+30.96 353.44 (Estimate and 95% Conf) 90 ta
+-0.360 (. Int.) tb gr
+170.12 209.26 (Affiliate-le) 0 ta
+-0.360 (v) tb
+-0.300 (el balanced panel. N = 10164, R2 = 0.667) tb gr
+77.04 278.38 547.04 577.90 cl
+0 0 0 srgb
+0.75 setlinewidth
+[ 2.25 3.75] 0 setdash
+1 setlinecap
+1 setlinejoin
+10.00 setmiterlimit
+np
+268.52 278.38 m
+0 299.52 l
+o
+18.00 204.94 577.28 636.94 cl
+0 0 0 srgb
+0.75 setlinewidth
+[] 0 setdash
+1 setlinecap
+1 setlinejoin
+10.00 setmiterlimit
+np
+ 77.04 278.38 m
+470.00 0 l
+0 299.52 l
+-470.00 0 l
+cp p1
+np
+77.04 286.41 m
+-7.20 0 l
+o
+np
+77.04 326.84 m
+-7.20 0 l
+o
+np
+77.04 367.27 m
+-7.20 0 l
+o
+np
+77.04 407.70 m
+-7.20 0 l
+o
+np
+77.04 448.13 m
+-7.20 0 l
+o
+np
+77.04 488.56 m
+-7.20 0 l
+o
+np
+77.04 528.99 m
+-7.20 0 l
+o
+np
+77.04 569.42 m
+-7.20 0 l
+o
+/Font1 findfont 12 s
+59.76 286.41 (-0.06) .5 90 t
+59.76 326.84 (-0.04) .5 90 t
+59.76 367.27 (-0.02) .5 90 t
+59.76 407.70 (0.00) .5 90 t
+59.76 448.13 (0.02) .5 90 t
+59.76 488.56 (0.04) .5 90 t
+59.76 528.99 (0.06) .5 90 t
+59.76 569.42 (0.08) .5 90 t
+np
+94.45 278.38 m
+0 -7.20 l
+o
+np
+181.48 278.38 m
+0 -7.20 l
+o
+np
+268.52 278.38 m
+0 -7.20 l
+o
+np
+355.56 278.38 m
+0 -7.20 l
+o
+np
+442.59 278.38 m
+0 -7.20 l
+o
+np
+529.63 278.38 m
+0 -7.20 l
+o
+94.45 252.46 (2010) .5 0 t
+181.48 252.46 (2012) .5 0 t
+268.52 252.46 (2014) .5 0 t
+355.56 252.46 (2016) .5 0 t
+442.59 252.46 (2018) .5 0 t
+529.63 252.46 (2020) .5 0 t
+77.04 278.38 547.04 577.90 cl
+0 0 0 srgb
+0.75 setlinewidth
+[] 0 setdash
+1 setlinecap
+1 setlinejoin
+10.00 setmiterlimit
+np
+94.45 400.91 m
+87.03 2.41 l
+87.04 4.38 l
+87.04 19.31 l
+87.03 -8.36 l
+87.04 50.69 l
+o
+np
+94.45 289.48 m
+0 222.86 l
+o
+np
+181.48 339.57 m
+0 127.49 l
+o
+np
+268.52 407.70 m
+0 0 l
+o
+np
+355.56 358.60 m
+0 136.82 l
+o
+np
+442.59 338.71 m
+0 159.87 l
+o
+np
+529.63 371.87 m
+0 194.94 l
+o
+np
+92.10 512.34 m
+4.70 0 l
+o
+np
+179.13 467.06 m
+4.70 0 l
+o
+np
+353.21 495.42 m
+4.70 0 l
+o
+np
+440.24 498.58 m
+4.70 0 l
+o
+np
+527.28 566.81 m
+4.70 0 l
+o
+np
+92.10 289.48 m
+4.70 0 l
+o
+np
+179.13 339.57 m
+4.70 0 l
+o
+np
+353.21 358.60 m
+4.70 0 l
+o
+np
+440.24 338.71 m
+4.70 0 l
+o
+np
+527.28 371.87 m
+4.70 0 l
+o
+/bg { 0 0 0 srgb } def
+94.45 400.91 1.80 c p3
+181.48 403.32 1.80 c p3
+268.52 407.70 1.80 c p3
+355.56 427.01 1.80 c p3
+442.59 418.65 1.80 c p3
+529.63 469.34 1.80 c p3
+77.04 577.90 86.52 -30.24 r p1
+np
+79.31 557.74 m
+15.12 0 l
+o
+86.87 557.74 1.89 c p1
+np
+84.98 557.74 m
+3.78 0 l
+o
+np
+86.87 555.85 m
+0 3.78 l
+o
+/Font1 findfont 8 s
+81.40 567.82 (Compar) 0 ta
+0.120 (ison countr) tb
+0.120 (ies) tb gr
+101.99 554.87 (High income EU) 0 0 t
+94.45 378.68 (-0.003) .5 0 t
+181.48 380.71 (-0.002) .5 0 t
+355.56 404.96 (0.01) .5 0 t
+442.59 394.86 (0.005) .5 0 t
+529.63 445.39 (0.03) .5 0 t
+ep
+%%Trailer
+%%Pages: 1
+%%EOF

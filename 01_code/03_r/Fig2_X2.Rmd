@@ -1,0 +1,107 @@
+---
+title: "日本企業現地法人数の推移と平均出資比率"
+author: "Ayumu Tanaka"
+date: "2025-06-06"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,    # コードを表示
+  cache = FALSE,  # キャッシュしない
+  message = FALSE, # パッケージ読込時などのメッセージを表示しない
+  warning = FALSE  # 警告メッセージを表示しない
+)
+
+```
+
+# パッケージの読み込み
+
+```{r load-package}
+library(ggplot2)
+library(dplyr)
+library(rio)
+```
+
+# データの読み込み
+
+```{r load-data-package}
+# 高所得EUと英国の年別現地法人数データ
+# N は現地法人数、WN は日本企業の出資比率で加重した現地法人数
+N_Aff_EU_high <- import("../../03_data_output/Affiliate/affiliate_count_high_income_eu_country_year.dta")
+
+# 高所得EUと英国に立地する個票レベルの現地法人データ
+# 年別の平均出資比率を描くために使う
+aff_EU_high <- import("../../03_data_output/Affiliate/affiliate_ownership_high_income_eu_country_year.dta")
+
+```
+
+# 付録図 X2: 高所得EUと英国の平均出資比率
+
+```{r fig-mean-ratio, dpi = 300}
+# 英国と比較対象国のグループ名を作成
+aff_EU_high$Group <- ifelse(aff_EU_high$GBR == 0, "High income EU", "UK")
+
+# 年ごとの平均出資比率と95%信頼区間を描画
+ratio1 <- ggplot(aff_EU_high,
+                 aes(x = year, y = Ratio, color = Group)) +
+  geom_point(stat = "summary", fun = "mean") +
+  geom_line(stat = "summary", fun = "mean") +
+  geom_ribbon(stat = "summary",
+              fun.data = "mean_cl_normal",
+              fill = "grey", alpha = 0.1, linetype = "dashed") +
+  labs(title = "Average ownership ratio",
+       x = "Year",
+       y = "Ownership ratio") +
+  theme_minimal() +
+  theme(legend.position = "right") +
+  labs(caption = "Solid line: Average ownership ratio.
+Shaded area: 95% confidence interval.") +
+  theme(plot.caption = element_text(hjust = 0, size = 8)) + 
+  geom_vline(xintercept = 2016, linetype = "dotted") +
+  annotate("text", x = 2016, y = 0.95, label = "Brexit referendum") +
+  scale_x_continuous(breaks = ~ axisTicks(., log = FALSE))
+
+ratio1
+
+ggsave(ratio1, file="../../04_tex/oa/FigX2.png", dpi = 300)
+```
+
+# Figure 2: 英国と高所得EUにおける現地法人数の推移
+
+```{r Fig1b-N-EU-GBR, dpi = 300}
+# 英国と比較対象国のラベルを作成
+N_Aff_EU_high$Host <- ifelse(N_Aff_EU_high$GBR == 0, "High-income EU", "UK")
+
+# 2010年を1とするように現地法人数を正規化
+N_Aff_EU_high$N2 <- N_Aff_EU_high$N / N_Aff_EU_high$N[N_Aff_EU_high$year == 2010]
+N_Aff_EU_high$WN2 <- N_Aff_EU_high$WN / N_Aff_EU_high$WN[N_Aff_EU_high$year == 2010]
+
+# 年ごとの現地法人数と出資比率加重系列を描画
+fig1b <- ggplot(N_Aff_EU_high,
+                aes(x = year, y = N2, color = Host)) +
+  geom_line() +
+  geom_line(aes(y = WN2), linetype = "dashed") +
+  scale_y_log10() +
+  labs(title = "",
+       x = "Year",
+       y = "Number of Affiliates") +
+  theme_minimal() +
+  geom_vline(xintercept = 2016, linetype = "dotted") +
+  theme(legend.position = "top") +
+  labs(caption = "Solid line: Number of affiliates. 2010 = 1.
+Dashed line: Number of affiliates weighted by ownership ratio. 2010 = 1.") +
+  theme(plot.caption = element_text(hjust = 0, size = 8)) +
+  annotate("text", x = 2016, y = 1.025, label = "Brexit referendum") +
+  scale_x_continuous(breaks = ~ axisTicks(., log = FALSE))
+
+fig1b
+
+# 論文本文用の図を保存
+ggsave(fig1b, file="../../04_tex/main/Fig2.eps", dpi = 300)
+
+```

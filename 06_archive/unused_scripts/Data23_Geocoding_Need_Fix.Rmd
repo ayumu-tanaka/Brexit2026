@@ -1,0 +1,591 @@
+---
+title: "Geocoding affiliate location in the UK"
+author: "Ayumu Tanaka"
+date: "2024-05-29"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # show messages
+                      warning=FALSE) # show warnings
+
+```
+
+
+# Load the package
+
+```{r load-package}
+library(ggplot2)
+library(tidyverse)
+library(rio)
+
+```
+
+# Load the data
+
+```{r load-data}
+# Load the data
+library(rio)
+SHJP_JP_FA <- import("../unused_output/SHJP_JP_FA.rds")
+
+# Subset of UK
+SHJP_JP_FA_GBR <- subset(SHJP_JP_FA, iso == "GBR")
+
+# Export as rds
+rio::export(SHJP_JP_FA_GBR, "../unused_output/SHJP_JP_FA_GBR.rds")
+
+```
+
+
+# Data Cleaning before geo-coding
+
+- Geocoding can be done at the Geoapify's free online tool:
+  - https://www.geoapify.com/tools/geocoding-online/
+- The data should be cleaned before geocoding.
+- The data should be divided into 8 parts to avoid the limitation of the free online tool.
+
+
+```{r data-cleaning}
+
+library(tidyverse)
+# Select variables related to the location
+aff_GBR_address <- SHJP_JP_FA_GBR %>% 
+  select(AffiliateCode, AffiliateNameAlph, JPCode, countryname, year, AddressAlph)
+
+# Create address ID variable which is unique to AddressAlph
+aff_GBR_address$address_id <- as.factor(as.numeric(as.factor(aff_GBR_address$AddressAlph)))
+
+# Subset of the data with one obserbation per each address_id
+aff_GBR_address_unique <- aff_GBR_address %>% 
+  distinct(address_id, .keep_all = TRUE)
+
+# Select variables
+aff_GBR_address_unique <- aff_GBR_address_unique %>% 
+  select(countryname, AddressAlph, address_id)
+
+# Sort the data by address_id
+aff_GBR_address_unique <- aff_GBR_address_unique %>% 
+  arrange(address_id)
+
+# Covert address_id to numeric
+aff_GBR_address_unique$address_id <- as.numeric(as.character(aff_GBR_address_unique$address_id))
+
+# Divide the data into 8 parts
+aff_GBR_address_unique$group <- cut(aff_GBR_address_unique$address_id, breaks = 8, labels = FALSE)
+
+# Export as csv by 8 group
+for (i in 1:8) {
+  aff_GBR_address_unique_i <- aff_GBR_address_unique %>% 
+    filter(group == i)
+  rio::export(aff_GBR_address_unique_i, paste0("../unused_output/aff_GBR_address_unique_", i, ".csv"))
+}
+
+# Export as csv
+#rio::export(aff_GBR_address_unique, "../Data_output/aff_GBR_address_unique.csv")
+
+```
+
+
+# Load the output of Geocoding 
+
+- The output of Geocoding should be loaded and merged with the original data.
+
+```{r load-geocoding-output}
+# Load the output of Geocoding for i =1:8
+
+# Import the data
+aff_GBR_address_geocoded_1 <- import("../unused_data_raw/geocoded_data/aff_GBR_address_unique_1_geocoded.csv")
+aff_GBR_address_geocoded_2 <- import("../unused_data_raw/geocoded_data/aff_GBR_address_unique_2_geocoded.csv")
+aff_GBR_address_geocoded_3 <- import("../unused_data_raw/geocoded_data/aff_GBR_address_unique_3_geocoded.csv")
+aff_GBR_address_geocoded_4 <- import("../unused_data_raw/geocoded_data/aff_GBR_address_unique_4_geocoded.csv")
+aff_GBR_address_geocoded_5 <- import("../unused_data_raw/geocoded_data/aff_GBR_address_unique_5_geocoded.csv")
+aff_GBR_address_geocoded_6 <- import("../unused_data_raw/geocoded_data/aff_GBR_address_unique_6_geocoded.csv")
+aff_GBR_address_geocoded_7 <- import("../unused_data_raw/geocoded_data/aff_GBR_address_unique_7_geocoded.csv")
+aff_GBR_address_geocoded_8 <- import("../unused_data_raw/geocoded_data/aff_GBR_address_unique_8_geocoded.csv")
+
+
+# Combine the data 1 to 4
+aff_GBR_address_geocoded <- rbind(aff_GBR_address_geocoded_1,
+                                  aff_GBR_address_geocoded_2, 
+                                  aff_GBR_address_geocoded_3,
+                                  aff_GBR_address_geocoded_4,
+                                  aff_GBR_address_geocoded_5,
+                                  aff_GBR_address_geocoded_6,
+                                  aff_GBR_address_geocoded_7,
+                                  aff_GBR_address_geocoded_8)
+
+
+# Select the necessary columns
+aff_GBR_address_geocoded <- aff_GBR_address_geocoded %>% 
+  select(original_address_id, original_AddressAlph, lat, lon, city, county)  
+
+# Count the NA of lat/lon
+sum(is.na(aff_GBR_address_geocoded$lat))
+sum(is.na(aff_GBR_address_geocoded$lon))
+
+
+```
+
+
+# Replace lot/lat for NA
+
+- Replace the NA of lat/lon with the correct value.
+
+```{r replace-lat-lon}
+# Replace the NA of lat/lon with the correct value
+## (1) 14 Blackhill Rd.West Holton Heath Trading Park Poole,Dorset,BHI6 6LF to 50.71752380203605, -2.073155041660397
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="14 Blackhill Rd.West Holton Heath Trading Park Poole,Dorset,BHI6 6LF"] <- 50.71752380203605
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="14 Blackhill Rd.West Holton Heath Trading Park Poole,Dorset,BHI6 6LF"] <- -2.073155041660397
+
+## (2) 12 Erca Rd.Stacey Bushes Milton Keynes MK12 6HS to 52.05039, -0.79844930
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="12 Erca Rd.Stacey Bushes Milton Keynes MK12 6HS"] <- 52.05039
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="12 Erca Rd.Stacey Bushes Milton Keynes MK12 6HS"] <- -0.79844930
+## city to Milton Keynes, county to Buckinghamshire
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="12 Erca Rd.Stacey Bushes Milton Keynes MK12 6HS"] <- "Milton Keynes"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="12 Erca Rd.Stacey Bushes Milton Keynes MK12 6HS"] <- "Buckinghamshire"
+
+## (3) 1230 High Rd.Whetstone,London N.20 OLH to 51.60784,-0.34035160
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="1230 High Rd.Whetstone,London N.20 OLH"] <- 51.60784
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="1230 High Rd.Whetstone,London N.20 OLH"] <- -0.34035160
+## London, Greater London
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="1230 High Rd.Whetstone,London N.20 OLH"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="1230 High Rd.Whetstone,London N.20 OLH"] <- "Greater London"
+
+## (4) 12b Beehive 3,Lingfield Point,Darlington,Country Durham,DL1 1YN 
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="12b Beehive 3,Lingfield Point,Darlington,Country Durham,DL1 1YN"] <- "Darlington"
+
+## (5) 2 Longwalk Rd.Hayes Park,Uxbridge Middlesex,UB11 1AB to 51.51039
+#-0.44777603, London, Greater London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="2 Longwalk Rd.Hayes Park,Uxbridge Middlesex,UB11 1AB"] <- 51.51039
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="2 Longwalk Rd.Hayes Park,Uxbridge Middlesex,UB11 1AB"] <- -0.44777603
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="2 Longwalk Rd.Hayes Park,Uxbridge Middlesex,UB11 1AB"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="2 Longwalk Rd.Hayes Park,Uxbridge Middlesex,UB11 1AB"] <- "Greater London"
+
+## (6) 2 Longwalk Rd.Stockley Park,Uxbridge,Middlesex UB11 1AB to 51.51039
+#-0.44777603, London, Greater London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="2 Longwalk Rd.Stockley Park,Uxbridge,Middlesex UB11 1AB"] <- 51.51039
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="2 Longwalk Rd.Stockley Park,Uxbridge,Middlesex UB11 1AB"] <- -0.44777603
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="2 Longwalk Rd.Stockley Park,Uxbridge,Middlesex UB11 1AB"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="2 Longwalk Rd.Stockley Park,Uxbridge,Middlesex UB11 1AB"] <- "Greater London"
+
+## (7). Aberdeen City belong to Aberdeenshire county
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$city=="Aberdeen City"] <- "Aberdeenshire"
+
+## (8) 2-8 Honduras St.London EC1Y OTX to 51.52390, -0.09594700, London, London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="2-8 Honduras St.London EC1Y OTX"] <- 51.52390
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="2-8 Honduras St.London EC1Y OTX"] <- -0.09594700
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="2-8 Honduras St.London EC1Y OTX"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="2-8 Honduras St.London EC1Y OTX"] <- "London"
+
+## (9) 2nd Fl.,The Metro Bldg.,1 Butterwick,Hammersmith,London W6 8DL to 51.49192019308762, -0.22188737394244676, London, London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="2nd Fl.,The Metro Bldg.,1 Butterwick,Hammersmith,London W6 8DL"] <- 51.49192019308762
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="2nd Fl.,The Metro Bldg.,1 Butterwick,Hammersmith,London W6 8DL"] <- -0.22188737394244676
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="2nd Fl.,The Metro Bldg.,1 Butterwick,Hammersmith,London W6 8DL"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="2nd Fl.,The Metro Bldg.,1 Butterwick,Hammersmith,London W6 8DL"] <- "London"
+
+## (10) 3rd Fl.,The Metro Bldg.,1 Butterwick,Hammersmith,London W6 8DL to 51.49192019308762, -0.22188737394244676, London, London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="3rd Fl.,The Metro Bldg.,1 Butterwick,Hammersmith,London W6 8DL"] <- 51.49192019308762
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="3rd Fl.,The Metro Bldg.,1 Butterwick,Hammersmith,London W6 8DL"] <- -0.22188737394244676
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="3rd Fl.,The Metro Bldg.,1 Butterwick,Hammersmith,London W6 8DL"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="3rd Fl.,The Metro Bldg.,1 Butterwick,Hammersmith,London W6 8DL"] <- "London"
+
+## (11) 47 Condvit St.Nl,London to 51.514284748842414, -0.12474993439392291, London, London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="47 Condvit St.Nl,London"] <- 51.514284748842414
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="47 Condvit St.Nl,London"] <- -0.12474993439392291
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="47 Condvit St.Nl,London"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="47 Condvit St.Nl,London"] <- "London"
+
+## (12) 4th Fl.Bow Bells House Bread St.London EC4M 9BQ to 51.51386, -0.09458930, London, London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="4th Fl.Bow Bells House Bread St.London EC4M 9BQ"] <- 51.51386
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="4th Fl.Bow Bells House Bread St.London EC4M 9BQ"] <- -0.09458930
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="4th Fl.Bow Bells House Bread St.London EC4M 9BQ"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="4th Fl.Bow Bells House Bread St.London EC4M 9BQ"] <- "London"
+
+## (13) 4th.Fl.Condor House,14 St.Paul's Churchyard,London EC4M 8BD to 51.51332338708703, -0.09984055092409298, London, London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="4th.Fl.Condor House,14 St.Paul's Churchyard,London EC4M 8BD"] <- 51.51332338708703
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="4th.Fl.Condor House,14 St.Paul's Churchyard,London EC4M 8BD"] <- -0.09984055092409298
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="4th.Fl.Condor House,14 St.Paul's Churchyard,London EC4M 8BD"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="4th.Fl.Condor House,14 St.Paul's Churchyard,London EC4M 8BD"] <- "London"
+
+## (14) 51 Spindus Rd.Speke Hall Ind.Estate,Liverpool L24 1YA to 53.34361, -2.86446860, Liverpool, Merseyside
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="51 Spindus Rd.Speke Hall Ind.Estate,Liverpool L24 1YA"] <- 53.34361
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="51 Spindus Rd.Speke Hall Ind.Estate,Liverpool L24 1YA"] <- -2.86446860
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="51 Spindus Rd.Speke Hall Ind.Estate,Liverpool L24 1YA"] <- "Liverpool"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="51 Spindus Rd.Speke Hall Ind.Estate,Liverpool L24 1YA"] <- "Merseyside"
+
+## (15) 51 Spindus Rd.Speke Hall Ind.Estate,Liverpool,L24 1YA to 53.34361, -2.86446860, Liverpool, Merseyside
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="51 Spindus Rd.Speke Hall Ind.Estate,Liverpool,L24 1YA"] <- 53.34361
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="51 Spindus Rd.Speke Hall Ind.Estate,Liverpool,L24 1YA"] <- -2.86446860
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="51 Spindus Rd.Speke Hall Ind.Estate,Liverpool,L24 1YA"] <- "Liverpool"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="51 Spindus Rd.Speke Hall Ind.Estate,Liverpool,L24 1YA"] <- "Merseyside"
+
+## (16) 51 Spindus Rd.Speke Hall Industrial Estate,Liverpool L24 1YA to 53.34361, -2.86446860, Liverpool, Merseyside
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="51 Spindus Rd.Speke Hall Industrial Estate,Liverpool L24 1YA"] <- 53.34361
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="51 Spindus Rd.Speke Hall Industrial Estate,Liverpool L24 1YA"] <- -2.86446860
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="51 Spindus Rd.Speke Hall Industrial Estate,Liverpool L24 1YA"] <- "Liverpool"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="51 Spindus Rd.Speke Hall Industrial Estate,Liverpool L24 1YA"] <- "Merseyside"
+
+## (17) 66 Chiltem St.London W1M 2AP to 51.52080, -0.15601200, London, London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="66 Chiltem St.London W1M 2AP"] <- 51.52080
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="66 Chiltem St.London W1M 2AP"] <- -0.15601200
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="66 Chiltem St.London W1M 2AP"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="66 Chiltem St.London W1M 2AP"] <- "London"
+
+## (18) 66 Chilten St.London W1M 2AP to 51.52080, -0.15601200, London, London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="66 Chilten St.London W1M 2AP"] <- 51.52080
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="66 Chilten St.London W1M 2AP"] <- -0.15601200
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="66 Chilten St.London W1M 2AP"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="66 Chilten St.London W1M 2AP"] <- "London"
+
+## (19) 66 Chilten St.London,W1M 2AP to 51.52080, -0.15601200, London, London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="66 Chilten St.London,W1M 2AP"] <- 51.52080
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="66 Chilten St.London,W1M 2AP"] <- -0.15601200
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="66 Chilten St.London,W1M 2AP"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="66 Chilten St.London,W1M 2AP"] <- "London"
+
+## (20) 74-78 Finsbury Pavement,London EC 2A-1AT to 51.52012, -0.08733430, London, London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="74-78 Finsbury Pavement,London EC 2A-1AT"] <- 51.52012
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="74-78 Finsbury Pavement,London EC 2A-1AT"] <- -0.08733430
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="74-78 Finsbury Pavement,London EC 2A-1AT"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="74-78 Finsbury Pavement,London EC 2A-1AT"] <- "London"
+
+## (21) Beeswing House 31 Sheep St.Wellingborough Northants NN8 1BZ to 52.30040049048032, -0.6924170220443967, Wellingborough, Northamptonshire
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Beeswing House 31 Sheep St.Wellingborough Northants NN8 1BZ"] <- 52.30040049048032
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Beeswing House 31 Sheep St.Wellingborough Northants NN8 1BZ"] <- -0.6924170220443967
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Beeswing House 31 Sheep St.Wellingborough Northants NN8 1BZ"] <- "Wellingborough"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Beeswing House 31 Sheep St.Wellingborough Northants NN8 1BZ"] <- "Northamptonshire"
+
+## (22) Burnastone,Derbyshire,DE1 9TA to 52.87269, -1.57399490, Derby, Derbyshire
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Burnastone,Derbyshire,DE1 9TA"] <- 52.87269
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Burnastone,Derbyshire,DE1 9TA"] <- -1.57399490
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Burnastone,Derbyshire,DE1 9TA"] <- "Derby"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Burnastone,Derbyshire,DE1 9TA"] <- "Derbyshire"
+
+## (23) Condor House 14 St.Paul's Churchyard,London,EC4M 8BD to 51.51349100961623, -0.1000041604498566, London, London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Condor House 14 St.Paul's Churchyard,London,EC4M 8BD"] <- 51.51349100961623
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Condor House 14 St.Paul's Churchyard,London,EC4M 8BD"] <- -0.1000041604498566
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Condor House 14 St.Paul's Churchyard,London,EC4M 8BD"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Condor House 14 St.Paul's Churchyard,London,EC4M 8BD"] <- "London"
+
+## (24) Great Britian Olympus Park,Quedgeley Gloucester GL2 4NF to 51.8311176579963, -2.274196172070395
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Great Britian Olympus Park,Quedgeley Gloucester GL2 4NF"] <- 51.8311176579963
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Great Britian Olympus Park,Quedgeley Gloucester GL2 4NF"] <- -2.274196172070395
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Great Britian Olympus Park,Quedgeley Gloucester GL2 4NF"] <- "Gloucester"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Great Britian Olympus Park,Quedgeley Gloucester GL2 4NF"] <- "Gloucestershire"
+
+## (25) Great Britian Olympus Park,Quedgeley Gloucester,GL2 4NF to 51.8311176579963, -2.274196172070395
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Great Britian Olympus Park,Quedgeley Gloucester,GL2 4NF"] <- 51.8311176579963
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Great Britian Olympus Park,Quedgeley Gloucester,GL2 4NF"] <- -2.274196172070395
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Great Britian Olympus Park,Quedgeley Gloucester,GL2 4NF"] <- "Gloucester"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Great Britian Olympus Park,Quedgeley Gloucester,GL2 4NF"] <- "Gloucestershire"
+
+## (26) Hammersmith Int'l Centre,3 Shortlands,London,W6 8EE to 51.49270
+# -0.21978825, London, London
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Hammersmith Int'l Centre,3 Shortlands,London,W6 8EE"] <- 51.49270
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Hammersmith Int'l Centre,3 Shortlands,London,W6 8EE"] <- -0.21978825
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Hammersmith Int'l Centre,3 Shortlands,London,W6 8EE"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Hammersmith Int'l Centre,3 Shortlands,London,W6 8EE"] <- "London"
+
+## (27) Hunts.Rise,South Marston PK.Swindon,Wilts,SN3 4TW to 51.59807, -1.74055500
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Hunts.Rise,South Marston PK.Swindon,Wilts,SN3 4TW"] <- 51.59807
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Hunts.Rise,South Marston PK.Swindon,Wilts,SN3 4TW"] <- -1.74055500
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Hunts.Rise,South Marston PK.Swindon,Wilts,SN3 4TW"] <- "Swindon"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Hunts.Rise,South Marston PK.Swindon,Wilts,SN3 4TW"] <- "Wiltshire"
+
+## (28) Jellicoe House Botleigh Grange,Hedge End,Southampton,SO3 4TX to 50.91543, -1.30714230
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Jellicoe House Botleigh Grange,Hedge End,Southampton,SO3 4TX"] <- 50.91543
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Jellicoe House Botleigh Grange,Hedge End,Southampton,SO3 4TX"] <- -1.30714230
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Jellicoe House Botleigh Grange,Hedge End,Southampton,SO3 4TX"] <- "Southampton"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Jellicoe House Botleigh Grange,Hedge End,Southampton,SO3 4TX"] <- "Hampshire"
+
+## (29) La Motte Chambers St.Heliet,Jer sey,C.I.to 49.18447868869196, -2.100899977081222
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="La Motte Chambers St.Heliet,Jer sey,C.I."] <- 49.18447868869196
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="La Motte Chambers St.Heliet,Jer sey,C.I."] <- -2.100899977081222
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="La Motte Chambers St.Heliet,Jer sey,C.I."] <- "Jersey"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="La Motte Chambers St.Heliet,Jer sey,C.I."] <- "Jersey"
+
+## (30) Lancashier to 54.05519102500022, -2.807323488877313
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Lancashier"] <- 54.05519102500022
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Lancashier"] <- -2.807323488877313
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Lancashier"] <- "Lancashire"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Lancashier"] <- "Lancashire"
+
+## (31) Mouticello House,45 Rusell Sq.London WC1B 4JP to 51.520717567646635, -0.1259477162684768
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Mouticello House,45 Rusell Sq.London WC1B 4JP"] <- 51.520717567646635
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Mouticello House,45 Rusell Sq.London WC1B 4JP"] <- -0.1259477162684768
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Mouticello House,45 Rusell Sq.London WC1B 4JP"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Mouticello House,45 Rusell Sq.London WC1B 4JP"] <- "London"
+
+## (32) P.O.Box 70 10th Fl.,Commercial Union Bldg.,St.Helen's.1-Undershaft,London EC3A 8JJ to 51.514409441192704, -0.08163365761782755
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="P.O.Box 70 10th Fl.,Commercial Union Bldg.,St.Helen's.1-Undershaft,London EC3A 8JJ"] <- 51.514409441192704
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="P.O.Box 70 10th Fl.,Commercial Union Bldg.,St.Helen's.1-Undershaft,London EC3A 8JJ"] <- -0.08163365761782755
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="P.O.Box 70 10th Fl.,Commercial Union Bldg.,St.Helen's.1-Undershaft,London EC3A 8JJ"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="P.O.Box 70 10th Fl.,Commercial Union Bldg.,St.Helen's.1-Undershaft,London EC3A 8JJ"] <- "London"
+
+## (33) Part 9th Fl.CP House,97/107 Uxbridge Rd.Ealing,London W5 5TL to 51.51167584332843, -0.31278054510518477
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Part 9th Fl.CP House,97/107 Uxbridge Rd.Ealing,London W5 5TL"] <- 51.51167584332843
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Part 9th Fl.CP House,97/107 Uxbridge Rd.Ealing,London W5 5TL"] <- -0.31278054510518477
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Part 9th Fl.CP House,97/107 Uxbridge Rd.Ealing,London W5 5TL"] <- "London"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Part 9th Fl.CP House,97/107 Uxbridge Rd.Ealing,London W5 5TL"] <- "London"
+
+## (34) Plastribution House 81 Market St.Ashby-de-la-Zouch,Leicestershire LE6 5AH to 52.74803046577447, -1.4694679315451427
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Plastribution House 81 Market St.Ashby-de-la-Zouch,Leicestershire LE6 5AH"] <- 52.74803046577447
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Plastribution House 81 Market St.Ashby-de-la-Zouch,Leicestershire LE6 5AH"] <- -1.4694679315451427
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Plastribution House 81 Market St.Ashby-de-la-Zouch,Leicestershire LE6 5AH"] <- "Ashby-de-la-Zouch"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Plastribution House 81 Market St.Ashby-de-la-Zouch,Leicestershire LE6 5AH"] <- "Leicestershire"
+
+## (35) Prioslee Telford,Shropshire TF2 9NS to 52.68255, -2.41812000
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Prioslee Telford,Shropshire TF2 9NS"] <- 52.68255
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Prioslee Telford,Shropshire TF2 9NS"] <- -2.41812000
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Prioslee Telford,Shropshire TF2 9NS"] <- "Telford"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Prioslee Telford,Shropshire TF2 9NS"] <- "Shropshire"
+
+## (36) Rutland House Pitt St.,St.Helier Jersey C.I. to 49.185615171218, -2.108479245230676
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House Pitt St.,St.Helier Jersey C.I."] <- 49.185615171218
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House Pitt St.,St.Helier Jersey C.I."] <- -2.108479245230676
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House Pitt St.,St.Helier Jersey C.I."] <- "St.Helier"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House Pitt St.,St.Helier Jersey C.I."] <- "Jersey"
+
+## (37) Rutland House Pitt St.,St.Helier Jersey. to 49.185615171218, -2.108479245230676
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House Pitt St.,St.Helier Jersey."] <- 49.185615171218
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House Pitt St.,St.Helier Jersey."] <- -2.108479245230676
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House Pitt St.,St.Helier Jersey."] <- "St.Helier"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House Pitt St.,St.Helier Jersey."] <- "Jersey"
+
+## (38) Rutland House Pitt St.,St.Helier,Jersey,Channel Islands to 49.185615171218, -2.108479245230676
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House Pitt St.,St.Helier,Jersey,Channel Islands"] <- 49.185615171218
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House Pitt St.,St.Helier,Jersey,Channel Islands"] <- -2.108479245230676
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House Pitt St.,St.Helier,Jersey,Channel Islands"] <- "St.Helier"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House Pitt St.,St.Helier,Jersey,Channel Islands"] <- "Jersey"
+
+## (39) Rutland House,Pitt St.,St.Helier Jersey Channel Islands to 49.185615171218, -2.108479245230676
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House,Pitt St.,St.Helier Jersey Channel Islands"] <- 49.185615171218
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House,Pitt St.,St.Helier Jersey Channel Islands"] <- -2.108479245230676
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House,Pitt St.,St.Helier Jersey Channel Islands"] <- "St.Helier"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House,Pitt St.,St.Helier Jersey Channel Islands"] <- "Jersey"
+
+## (40) Rutland House,Pitt St.,St.Helier Jersey.Channel Island to 49.185615171218, -2.108479245230676
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House,Pitt St.,St.Helier Jersey.Channel Island"] <- 49.185615171218
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House,Pitt St.,St.Helier Jersey.Channel Island"] <- -2.108479245230676
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House,Pitt St.,St.Helier Jersey.Channel Island"] <- "St.Helier"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Rutland House,Pitt St.,St.Helier Jersey.Channel Island"] <- "Jersey"
+
+## (41) St.Helier,Jersey,Channel Islands to 49.18039484878236, -2.103169031473648
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="St.Helier,Jersey,Channel Islands"] <- 49.18039484878236
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="St.Helier,Jersey,Channel Islands"] <- -2.103169031473648
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="St.Helier,Jersey,Channel Islands"] <- "St.Helier"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="St.Helier,Jersey,Channel Islands"] <- "Jersey"
+
+## (42) Suite 17 Lomond House Almondvale Livingston,West Lothian EH 54,6QF to 55.88520666548146, -3.5081952101192044
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Suite 17 Lomond House Almondvale Livingston,West Lothian EH 54,6QF"] <- 55.88520666548146
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Suite 17 Lomond House Almondvale Livingston,West Lothian EH 54,6QF"] <- -3.5081952101192044
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Suite 17 Lomond House Almondvale Livingston,West Lothian EH 54,6QF"] <- "Livingston"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Suite 17 Lomond House Almondvale Livingston,West Lothian EH 54,6QF"] <- "West Lothian"
+
+## (43) Timberham Hose,Gatwick Airport,West Sussex,RH6 0EQ to 51.158834161666874, -0.18432714512450585
+# Gatwick's World Cargo Center, Timberham Way, Horley, Gatwick RH6 0EY, UK
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Timberham Hose,Gatwick Airport,West Sussex,RH6 0EQ"] <- 51.158834161666874
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Timberham Hose,Gatwick Airport,West Sussex,RH6 0EQ"] <- -0.18432714512450585
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Timberham Hose,Gatwick Airport,West Sussex,RH6 0EQ"] <- "Gatwick"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Timberham Hose,Gatwick Airport,West Sussex,RH6 0EQ"] <- "West Sussex"
+
+## (44) Unit 11,Liddall Way Horton Rd.,West Drayton Middlesex,UB7 8PG to 51.50572, -0.47014660
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Unit 11,Liddall Way Horton Rd.,West Drayton Middlesex,UB7 8PG"] <- 51.50572
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Unit 11,Liddall Way Horton Rd.,West Drayton Middlesex,UB7 8PG"] <- -0.47014660
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Unit 11,Liddall Way Horton Rd.,West Drayton Middlesex,UB7 8PG"] <- "West Drayton"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Unit 11,Liddall Way Horton Rd.,West Drayton Middlesex,UB7 8PG"] <- "Middlesex"
+
+## (45) Unit 19,Darwell Park Mica Close Amington Industrial Est.Nr.Tamworth,Staffs to 52.62140355793062, -1.6459069555912953
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Unit 19,Darwell Park Mica Close Amington Industrial Est.Nr.Tamworth,Staffs"] <- 52.62140355793062
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Unit 19,Darwell Park Mica Close Amington Industrial Est.Nr.Tamworth,Staffs"] <- -1.6459069555912953
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Unit 19,Darwell Park Mica Close Amington Industrial Est.Nr.Tamworth,Staffs"] <- "Tamworth"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Unit 19,Darwell Park Mica Close Amington Industrial Est.Nr.Tamworth,Staffs"] <- "Staffordshire"
+
+## (46) Unit 205H Stafford House 8 Brakey Rd.Weldon North Ind.Estate Corby Northants NN17 1LU to 52.50026712292236, -0.647984950610445
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Unit 205H Stafford House 8 Brakey Rd.Weldon North Ind.Estate Corby Northants NN17 1LU"] <- 52.50026712292236
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Unit 205H Stafford House 8 Brakey Rd.Weldon North Ind.Estate Corby Northants NN17 1LU"] <- -0.647984950610445
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Unit 205H Stafford House 8 Brakey Rd.Weldon North Ind.Estate Corby Northants NN17 1LU"] <- "Corby"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Unit 205H Stafford House 8 Brakey Rd.Weldon North Ind.Estate Corby Northants NN17 1LU"] <- "Northamptonshire"
+
+## (47) Unit 4/5 Sawfield House,Alconbury Hill,Alconbury Weston,Huntington Cambridgeshire,PE28 4JL to 52.38759861207766, -0.25713608923765385
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Unit 4/5 Sawfield House,Alconbury Hill,Alconbury Weston,Huntington Cambridgeshire,PE28 4JL"] <- 52.38759861207766
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Unit 4/5 Sawfield House,Alconbury Hill,Alconbury Weston,Huntington Cambridgeshire,PE28 4JL"] <- -0.25713608923765385
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Unit 4/5 Sawfield House,Alconbury Hill,Alconbury Weston,Huntington Cambridgeshire,PE28 4JL"] <- "Huntington"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Unit 4/5 Sawfield House,Alconbury Hill,Alconbury Weston,Huntington Cambridgeshire,PE28 4JL"] <- "Cambridgeshire"
+
+## (48) Unit 4/5 Sawield House,Alconbury Hill,Alconbury Weston,Huntington Cambridgeshire,PE28 4JL to 52.38759861207766, -0.25713608923765385
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Unit 4/5 Sawield House,Alconbury Hill,Alconbury Weston,Huntington Cambridgeshire,PE28 4JL"] <- 52.38759861207766
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Unit 4/5 Sawield House,Alconbury Hill,Alconbury Weston,Huntington Cambridgeshire,PE28 4JL"] <- -0.25713608923765385
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Unit 4/5 Sawield House,Alconbury Hill,Alconbury Weston,Huntington Cambridgeshire,PE28 4JL"] <- "Huntington"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Unit 4/5 Sawield House,Alconbury Hill,Alconbury Weston,Huntington Cambridgeshire,PE28 4JL"] <- "Cambridgeshire"
+
+
+## (49) Units V1-V2 Grovemere Court,Bicton Rural Ind.Park,Kimbolton,Huntingdon Cambridgeshire,PE28 0EY to 52.31215177615965, -0.3795445953198574
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Units V1-V2 Grovemere Court,Bicton Rural Ind.Park,Kimbolton,Huntingdon Cambridgeshire,PE28 0EY"] <- 52.31215177615965
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Units V1-V2 Grovemere Court,Bicton Rural Ind.Park,Kimbolton,Huntingdon Cambridgeshire,PE28 0EY"] <- -0.3795445953198574
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Units V1-V2 Grovemere Court,Bicton Rural Ind.Park,Kimbolton,Huntingdon Cambridgeshire,PE28 0EY"] <- "Kimbolton"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Units V1-V2 Grovemere Court,Bicton Rural Ind.Park,Kimbolton,Huntingdon Cambridgeshire,PE28 0EY"] <- "Cambridgeshire"
+
+## (50) Walthamavey Essex to 51.685551969707596, 0.027834924513882593
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_AddressAlph=="Walthamavey Essex"] <- 51.685551969707596
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_AddressAlph=="Walthamavey Essex"] <- 0.027834924513882593
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_AddressAlph=="Walthamavey Essex"] <- "Walthamavey"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_AddressAlph=="Walthamavey Essex"] <- "Essex"
+
+
+
+# Count the NA of lat/lon
+sum(is.na(aff_GBR_address_geocoded$lat))
+sum(is.na(aff_GBR_address_geocoded$lon))
+
+
+
+```
+
+
+
+# Subset of NA
+
+```{r}
+# Subset of NA
+aff_GBR_address_geocoded_NA <- aff_GBR_address_geocoded[is.na(aff_GBR_address_geocoded$lat),]
+
+# List all rows
+aff_GBR_address_geocoded_NA
+
+```
+
+# Replace NA with correct lat/lon
+
+
+
+```{r}
+## (1) Rutland House Pitt St.,St.Helier Jersey to 49.185615171218, -2.108479245230676
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_address_id==2953] <- 49.185615171218
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_address_id==2953] <- -2.108479245230676
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_address_id==2953] <- "St.Helier"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_address_id==2953] <- "Jersey"
+
+## (2) Unit 19,Darwell Park Mica Close Amington Industrial Est.Nr.Tamworth,Staffs to 52.62140355793062, -1.6459069555912953
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_address_id==3371] <- 52.62140355793062
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_address_id==3371] <- -1.6459069555912953
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_address_id==3371] <- "Tamworth"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_address_id==3371] <- "Staffordshire"
+
+## (3) Unit 205H Stafford House 8 Brakey Rd.Weldon North Ind.Estate Corby Northants NN17 1LU to 52.50026712292236, -0.647984950610445
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_address_id==3402] <- 52.50026712292236
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_address_id==3402] <- -0.647984950610445
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_address_id==3402] <- "Corby"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_address_id==3402] <- "Northamptonshire"
+
+## (4) Unit 4/5 Sawfield House,Alconbury Hill,Alconbury Weston,Huntington Cambridgeshire,PE28 4JL to 52.38759861207766, -0.25713608923765385
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_address_id==3477] <- 52.38759861207766
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_address_id==3477] <- -0.25713608923765385
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_address_id==3477] <- "Huntington"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_address_id==3477] <- "Cambridgeshire"
+
+## (5) Unit 4/5 Sawield House,Alconbury Hill,Alconbury Weston,Huntington Cambridgeshire,PE28 4JL to 52.38759861207766, -0.25713608923765385
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_address_id==3478] <- 52.38759861207766
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_address_id==3478] <- -0.25713608923765385
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_address_id==3478] <- "Huntington"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_address_id==3478] <- "Cambridgeshire"
+
+## (6) Unit2,Aberafan Rd.Baglan Industrial Park,Port Talbot,West Glamorgan SA12 70J to 51.6125, -3.7833
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_address_id==3618] <- 51.6125
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_address_id==3618] <- -3.7833
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_address_id==3618] <- "Port Talbot"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_address_id==3618] <- "West Glamorgan"
+
+## (7) Unite 27,Queensway Meadouws Industrial Estate,Newport,Gwent NP9 0SP to 51.5883, -2.9986
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_address_id==3622] <- 51.5883
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_address_id==3622] <- -2.9986
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_address_id==3622] <- "Newport"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_address_id==3622] <- "Gwent"
+
+## (8) Units V1-V2 Grovemere Court,Bicton Rural Ind.Park,Kimbolton,Huntingdon Cambridgeshire,PE28 0EY to 52.31215177615965, -0.3795445953198574
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_address_id==3644] <- 52.31215177615965
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_address_id==3644] <- -0.3795445953198574
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_address_id==3644] <- "Kimbolton"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_address_id==3644] <- "Cambridgeshire"
+
+## (9) Walthamavey Essex to 51.685551969707596, 0.027834924513882593
+aff_GBR_address_geocoded$lat[aff_GBR_address_geocoded$original_address_id==3699] <- 51.685551969707596
+aff_GBR_address_geocoded$lon[aff_GBR_address_geocoded$original_address_id==3699] <- 0.027834924513882593
+aff_GBR_address_geocoded$city[aff_GBR_address_geocoded$original_address_id==3699] <- "Walthamavey"
+aff_GBR_address_geocoded$county[aff_GBR_address_geocoded$original_address_id==3699] <- "Essex"
+
+
+# Count the NA of lat/lon
+sum(is.na(aff_GBR_address_geocoded$lat))
+sum(is.na(aff_GBR_address_geocoded$lon))
+
+```
+
+
+# Export the geo-coded data
+
+```{r}
+# Export as rds
+rio::export(aff_GBR_address_geocoded, "../unused_output/aff_GBR_address_geocoded.rds")
+```
+
+
+# Combine SHJP_JP_FA_GBR with geo-coded data
+
+```{r}
+# Combine SHJP_JP_FA_GBR with geo-coded data
+aff_GBR_address <- merge(aff_GBR_address, 
+                                 aff_GBR_address_geocoded,
+                                 by.x="address_id", 
+                                 by.y="original_address_id", 
+                                 all.x=TRUE)
+
+# Remove original_AddressAlph
+aff_GBR_address$original_AddressAlph <- NULL
+
+# count the number of aff_GBR_address$AddressAlph==""
+sum((aff_GBR_address$AddressAlph==""))
+
+# If aff_GBR_address$AddressAlph=="", then replace lat/lon with NA
+aff_GBR_address$lat[aff_GBR_address$AddressAlph==""] <- NA
+aff_GBR_address$lon[aff_GBR_address$AddressAlph==""] <- NA
+aff_GBR_address$city[aff_GBR_address$AddressAlph==""] <- NA
+aff_GBR_address$county[aff_GBR_address$AddressAlph==""] <- NA
+
+```
+
+# Combine SHJP_JP_FA_GBR with geo-coded data
+
+```{r}
+# Select necessary columns of aff_GBR_address
+aff_GBR_address <- aff_GBR_address[,c("AffiliateCode", "year", "lat", "lon", "city", "county")]
+
+# Combine SHJP_JP_FA_GBR with geo-coded data
+
+SHJP_JP_FA_GBR <- merge(SHJP_JP_FA_GBR, 
+                                 aff_GBR_address,
+                                 by.x = c("AffiliateCode", "year"),
+                                 by.y = c("AffiliateCode", "year"), 
+                                 all.x=TRUE)
+
+```
+
+# Export the SHJP_JP_FA_GBR
+
+```{r}
+# Export as rds
+rio::export(SHJP_JP_FA_GBR, "../unused_output/SHJP_JP_FA_GBR.rds")
+
+```
+
+# Remove all 
+```{r}
+rm(list=ls())
+
+```

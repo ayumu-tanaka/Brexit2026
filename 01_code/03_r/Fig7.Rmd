@@ -1,0 +1,231 @@
+---
+title: "SDiDによる退出効果の推定図"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+
+```{r packages}
+# devtools::install_github("synth-inference/synthdid")
+library(synthdid)
+library(ggplot2)
+
+set.seed(12345)
+```
+
+# データの読み込み
+
+```{r data}
+library(rio)
+aff_highEU <- rio::import("../../03_data_output/Affiliate/affiliate_panel_brexit_high_income_eu_sample.dta")
+
+# 2010年から2020年に限定
+aff_highEU <- aff_highEU[aff_highEU$year >= 2010 & aff_highEU$year <= 2020, ]
+
+```
+
+
+
+```{r prepare}
+
+aff_highEUb <- aff_highEU[, c("AffiliateCode", "country", "year",
+                              "exitit", "Brexit")]
+# `Brexit` を `treated` に変更
+names(aff_highEUb)[names(aff_highEUb)=="Brexit"] = "treated"
+
+table(aff_highEUb$year, aff_highEUb$treated)
+
+# ------------------------------------------------------------------
+# Brexit 変数の W_{it} 検証
+# W_{it} = 1 if (country == "GBR") & (year >= 2016), else 0
+# 条件(1): 処置前（year < 2016）はすべて treated == 0
+# 条件(2): treated == 1 となるのは GBR 系列会社（year >= 2016）のみ
+stopifnot(
+  "処置前（year < 2016）に treated == 1 の行が存在します" =
+    all(aff_highEUb$treated[aff_highEUb$year < 2016] == 0),
+  "GBR 以外に treated == 1 の行が存在します" =
+    all(aff_highEUb$country[aff_highEUb$treated == 1] == "GBR")
+)
+cat("検証 OK: Brexit は W_{it} として正しく定義されています\n")
+cat(sprintf("  処置前（year < 2016）treated == 1 の行数: %d\n",
+            sum(aff_highEUb$treated[aff_highEUb$year < 2016] == 1)))
+cat(sprintf("  処置後（year >= 2016, GBR）treated == 1 の行数: %d\n",
+            sum(aff_highEUb$treated == 1)))
+# ------------------------------------------------------------------
+
+# データフレームに変換
+aff_highEUb <- as.data.frame(aff_highEUb)
+
+# `country`・`year`・`outcome`・`treated` の順に並べる
+aff_highEUb <- aff_highEUb[, c("AffiliateCode", "year", "exitit", "treated")]
+
+```
+
+# バランスト・パネルの検証と作成
+
+SDiD は $N$ ユニット × $T$ 期間のバランスト・パネルを前提とする（Arkhangelsky et al. 2021, §設定）。
+退出した系列会社はその後の年に観測されないため、パネルが非バランストになる可能性がある。
+全期間に観測されないユニットを除外してバランスト化する。
+
+```{r balanced-panel}
+n_units <- length(unique(aff_highEUb$AffiliateCode))
+n_years <- length(unique(aff_highEUb$year))
+n_obs   <- nrow(aff_highEUb)
+is_balanced <- (n_obs == n_units * n_years)
+
+cat(sprintf("ユニット数（系列会社）: %d\n", n_units))
+cat(sprintf("期間数: %d\n", n_years))
+cat(sprintf("観測数: %d\n", n_obs))
+cat(sprintf("バランスト・パネル: %s\n",
+            if (is_balanced) "はい" else "いいえ（欠損あり）"))
+
+if (!is_balanced) {
+  # 全期間（n_years 期間）に観測されるユニットのみ残す
+  obs_count     <- table(aff_highEUb$AffiliateCode)
+  complete_units <- names(obs_count[obs_count == n_years])
+  n_dropped     <- n_units - length(complete_units)
+  aff_highEUb   <- aff_highEUb[aff_highEUb$AffiliateCode %in% complete_units, ]
+  cat(sprintf("全期間（%d 期間）に観測されないユニットを除外: %d ユニット削除\n",
+              n_years, n_dropped))
+  cat(sprintf("バランスト後: ユニット数 %d, 観測数 %d\n",
+              length(complete_units), nrow(aff_highEUb)))
+  # 再確認
+  stopifnot(nrow(aff_highEUb) == length(complete_units) * n_years)
+  cat("バランスト・パネル作成完了\n")
+}
+```
+
+# Synthetic DiD 用のデータを準備
+
+- `sprintf` is a wrapper for the C function sprintf, that returns a character vector containing a formatted combination of text and variable values.
+
+```{r sdid, message=FALSE,  warning=FALSE}
+
+# `panel.matrices` で wide 形式に変換
+setup = synthdid::panel.matrices(aff_highEUb, unit =1, time = 2, outcome = 3, treatment =4)
+# `synthdid_estimate` で SDiD を推定
+## Y: matrix of observed values
+## N0: number of control group
+## T0: number of pretreatment periods
+aff_highEUb.tau.hat = synthdid::synthdid_estimate(setup$Y, setup$N0, setup$T0)
+aff_highEUb.tau.hat
+print(summary(aff_highEUb.tau.hat))
+
+# 分散共分散行列を計算
+# Bootstrap 法で標準誤差を計算（set.seed は直前に置く）
+set.seed(12345)
+se_boot = sqrt(vcov(aff_highEUb.tau.hat, method = 'bootstrap'))
+# Jackknife
+se_jack = sqrt(vcov(aff_highEUb.tau.hat, method = 'jackknife'))
+# Placebo
+se_placebo = sqrt(vcov(aff_highEUb.tau.hat, method = 'placebo'))
+
+# 観測数 (Unit数)
+N_units <- nrow(setup$Y)
+
+```
+
+
+```{r label}
+# sprintf
+label_point <- sprintf('Point estimate = %1.3f', aff_highEUb.tau.hat)
+
+label_boot <- sprintf('Bootstrap S.E. = %1.3f, 95%% CI [%1.3f, %1.3f]', 
+                       se_boot, 
+                       aff_highEUb.tau.hat - 1.96 * se_boot, 
+                       aff_highEUb.tau.hat + 1.96 * se_boot)
+
+label_jack <- sprintf('Jackknife S.E. = %1.3f, 95%% CI [%1.3f, %1.3f]', 
+                       se_jack, 
+                       aff_highEUb.tau.hat - 1.96 * se_jack, 
+                       aff_highEUb.tau.hat + 1.96 * se_jack)
+
+label_placebo <- sprintf('Placebo S.E. = %1.3f, 95%% CI [%1.3f, %1.3f]', 
+                          se_placebo, 
+                          aff_highEUb.tau.hat - 1.96 * se_placebo, 
+                          aff_highEUb.tau.hat + 1.96 * se_placebo)
+
+label_n <- sprintf('N = %d', N_units)
+
+label_point
+label_boot
+label_jack
+label_placebo
+label_n
+```
+
+
+# 処置効果を図示
+
+```{r Fig8_SDiD, dpi = 300}
+# Bootstrap 法による結果をプロット
+g1 <- plot(aff_highEUb.tau.hat, se.method = 'bootstrap')
+
+# ラベルをプロット内に追加
+g2 <- g1 + 
+  scale_x_continuous(breaks = ~ axisTicks(., log = FALSE)) + 
+  annotate("text", x = 2016, y = 0.15, label = label_point, size = 3, hjust = 0) +
+  annotate("text", x = 2016, y = 0.12, label = label_boot, size = 3, hjust = 0) +
+  annotate("text", x = 2016, y = 0.09, label = label_jack, size = 3, hjust = 0) +
+  annotate("text", x = 2016, y = 0.06, label = label_placebo, size = 3, hjust = 0) +
+  annotate("text", x = 2016, y = 0.03, label = label_n, size = 3, hjust = 0)
+
+g2
+
+# 図を保存
+ggsave("../../04_tex/main/Fig7.pdf", dpi = 300,
+       width=8, height=6)
+
+```
+
+## ウェイトの確認
+
+```{r weight, fig.width=7, fig.height=4}
+g_units <- synthdid_units_plot(aff_highEUb.tau.hat, se.method='placebo')
+# 対照群ウェイトのデータ
+control_weight <- g_units$data
+
+# 2010年データから現地法人と国の対応表を作る
+aff_country_map <- aff_highEU[aff_highEU$year == 2010, c("AffiliateCode", "country", "GDP_per_capita")]
+
+# ウェイトと対応表を結合
+control_weight2 <- merge(control_weight,
+                         aff_country_map,
+                         by.x = "unit",
+                         by.y = "AffiliateCode",
+                         all.x = TRUE)
+
+# 国別にウェイトを集計
+library(dplyr)
+control_weight_country <- control_weight2 %>%
+  group_by(country) %>%
+  summarise(weight = sum(weight),
+            y = sum(y * weight),
+            estimate = first(estimate),
+            GDP_per_capita = first(GDP_per_capita)
+            ) 
+
+# `countrycode` で国名を付与
+library(countrycode)
+control_weight_country <- control_weight_country %>% 
+  mutate(country_name = countrycode(country,
+     origin = "iso3c",
+     destination = "country.name")
+  )
+
+# 集計済みウェイトを保存
+rio::export(control_weight_country, "../../03_data_output/synthdid_control_weight_affiliate_country.dta")
+```

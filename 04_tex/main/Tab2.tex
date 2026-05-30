@@ -1,0 +1,27 @@
+\begin{table}[!ht]
+\centering
+\caption{\label{tab:Table-ETWFE-OLS}Effect of the Brexit Referendum on Exit Probability (ETWFE, OLS)}
+\centering
+\begin{tabular}[t]{lcc}
+\toprule
+\multicolumn{1}{c}{ } & \multicolumn{2}{c}{Exit probability} \\
+\cmidrule(l{3pt}r{3pt}){2-3}
+ & (1) & (2)\\
+\midrule
+UK $\times$ 2016 & 0.011 & 0.007\\
+ & (0.026) & (0.023)\\
+UK $\times$ 2018 & 0.007 & 0.004\\
+ & (0.028) & (0.025)\\
+UK $\times$ 2020 & 0.032 & 0.027\\
+ & (0.032) & (0.028)\\
+Num.Obs. & 10164 & 11568\\
+Group Fixed-Effects & Yes & Yes\\
+Two-year Period Fixed-Effects & Yes & Yes\\
+R2 & 0.104 & 0.104\\
+\bottomrule
+\end{tabular}
+\begin{flushleft}
+\footnotesize
+Notes: Marginal effects from Wooldridge's (2021) extended two-way fixed effects (ETWFE) model are reported in the table. Standard errors are clustered at the country level and presented in parentheses. The data are affiliate-level balanced panel data from the OJC data. The estimation uses data from 2010 to 2020, with event-time indicators grouped into two-year bins and the 2014--2015 bin omitted as the reference period. To improve computational efficiency, the estimation employs group-level (i.e., country-level) fixed effects instead of unit-level (i.e., affiliate-level) fixed effects. This estimation strategy follows Wooldridge (2021), which demonstrates the equivalence of group- and unit-level fixed effects in linear models. The R package `etwfe` is used for implementation. * $p<0.05$, ** $p<0.01$, *** $p<0.001$.
+\end{flushleft}
+\end{table}

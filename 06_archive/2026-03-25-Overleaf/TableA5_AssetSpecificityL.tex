@@ -1,0 +1,45 @@
+\begin{table}[ht]
+\centering
+\caption{Industry Liquidation Recovery Rates with Low Asset Specificity}
+\label{tab:SpecificityLow}
+\centering
+\begin{threeparttable}
+\begin{tabular}{llccc}
+\toprule
+\textbf{Code} & \textbf{Industry} & \textbf{Liquidation Recovery Rate} & \textbf{Asset Specificity} & \textbf{SIC} \\
+\midrule
+1110 & Mining & 0.390 & Low & 10, 12, 13, 14 \\
+1310 & Food Products & 0.370 & Low & 20 \\
+1810 & Petroleum, Coal & 0.360 & Low & 13, 12 \\
+1910 & Rubber Products & 0.430 & Low & 30 \\
+2010 & Glass, Stone \& Clay Products & 0.440 & Low & 32 \\
+2110 & Iron \& Steel & 0.430 & Low & 33 \\
+2210 & Non-ferrous Metals & 0.430 & Low & 33 \\
+2310 & Metal Products & 0.390 & Low & 34 \\
+2410 & Machinery & 0.360 & Low & 35 \\
+2610 & Transportation Equipment & 0.380 & Low & 37 \\
+2710 & Precision Instruments & 0.380 & Low & 38 \\
+2910 & Electric Power, Gas & 0.500 & Low & 49 \\
+3010 & Railway, Bus & 0.540 & Low & 41 \\
+3110 & Freight Transport & 0.540 & Low & 42 \\
+3210 & Shipping & 0.490 & Low & 44 \\
+3310 & Air Transport & 0.510 & Low & 45 \\
+3410 & Warehousing, Logistics-related & 0.580 & Low & 47, 42 \\
+4010 & General Wholesale & 0.435 & Low & 50, 51 \\
+4110 & Textiles, Apparel Wholesale & 0.540 & Low & 51 \\
+4210 & Food Products Wholesale & 0.540 & Low & 51 \\
+4310 & Chemicals Wholesale & 0.540 & Low & 51 \\
+4410 & Pharmaceuticals Wholesale & 0.540 & Low & 51 \\
+4510 & Petroleum, Fuel Wholesale & 0.540 & Low & 51 \\
+5210 & Other Wholesale & 0.435 & Low & 50, 51 \\
+5410 & Supermarkets & 0.360 & Low & 54 \\
+7110 & Hotels & 0.500 & Low & 70 \\
+\bottomrule
+\end{tabular}
+
+\begin{tablenotes}
+\item \textit{Notes: } 
+ The liquidation recovery rates from Table II of \cite{kermani2023asset} were assigned to the industries in the OJC data corresponding to their SIC codes. For industries in the OJC data that correspond to multiple SIC codes, the average value of the liquidation recovery rates of the relevant SIC codes was used. Industries with liquidation recovery rates exceeding the average value of 0.35 are defined as having low asset specificity, while those below this threshold are defined as having high asset specificity.
+ \end{tablenotes}
+\end{threeparttable}
+\end{table}

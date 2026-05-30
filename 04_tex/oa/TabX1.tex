@@ -1,0 +1,47 @@
+\begin{table}
+\centering
+\begin{talltblr}[         %% tabularray outer open
+caption={Cox regression model at affiliate-level},
+label={tab:modelsummary-aff},
+note{}={* p < 0.05, ** p < 0.01, *** p < 0.001},
+note{ }={Hazard ratios are reported. The Cox proportional hazards model estimates them. Failure event is exit. Variables with hazard ratios greater than 1 are associated with a higher likelihood of exit and shorter survival time. Variables with a hazard ratio smaller than 1 are associated with a lower likelihood of exit and longer survival time. Host countries' fixed effects and year-fixed effects are included in the estimation. Standard errors are presented in blankets.},
+]                     %% tabularray outer close
+{                     %% tabularray inner open
+colspec={Q[]Q[]Q[]Q[]Q[]},
+hline{2}={5}{solid, black, 0.05em},
+hline{3}={1-5}{solid, black, 0.05em},
+hline{17}={1-5}{solid, black, 0.05em},
+hline{2}={2,4}{solid, black, 0.05em, l=-0.5},
+hline{2}={3}{solid, black, 0.05em, r=-0.5},
+hline{1}={1-5}{solid, black, 0.1em},
+hline{21}={1-5}{solid, black, 0.1em},
+column{3,5}={}{halign=c},
+cell{1}{1}={}{halign=c},
+cell{1}{2}={c=2}{halign=c},
+cell{1}{4}={c=2}{halign=c},
+cell{2-20}{1}={}{halign=l},
+cell{2-20}{2}={}{halign=c},
+cell{2-20}{4}={}{halign=c},
+}                     %% tabularray inner close
+& World &  & Europe only &  \\
+& (1) & (2) & (3) & (4) \\
+Brexit & 1.12740 & 1.19415* & 1.27665** & 1.23179* \\
+& (0.08785) & (0.09335) & (0.11977) & (0.11576) \\
+Ownership ratio & 1.22022*** & 1.16762*** & 0.81130*** & 0.80571*** \\
+& (0.02711) & (0.02523) & (0.05091) & (0.05082) \\
+Affiliate size & 0.99997** & 0.99996** & 0.99992 & 0.99990* \\
+& (0.00001) & (0.00001) & (0.00005) & (0.00005) \\
+GBR & 0.93587* &  & 0.94301 &  \\
+& (0.02811) &  & (0.03234) &  \\
+log GDP, PPP & 1.02736*** &  & 0.94492*** &  \\
+& (0.00387) &  & (0.01573) &  \\
+log GDP per capita, PPP & 0.88693*** &  & 0.65414*** &  \\
+& (0.00631) &  & (0.04948) &  \\
+log Distance from Japan & 0.89376*** &  & 0.36058*** &  \\
+& (0.00777) &  & (0.11178) &  \\
+Fixed Effect: Year & YES & YES & YES & YES \\
+Fixed Effect: Sector & YES & YES & YES & YES \\
+Fixed Effect: Country & NO & YES & NO & YES \\
+Num.Obs. & 42935 & 45132 & 6104 & 6104 \\
+\end{talltblr}
+\end{table}

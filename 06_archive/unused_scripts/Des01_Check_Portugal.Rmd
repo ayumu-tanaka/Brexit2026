@@ -1,0 +1,94 @@
+---
+title: "Check Number of Affiliates in Portugal"
+author: "Ayumu Tanaka"
+date: "2024-05-23"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    keep_md: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # do not show messages
+                      warning=FALSE) # do not show warnings
+
+```
+
+
+
+# Preparation
+
+
+```{r preparation}
+# Remove all data
+rm(list = ls())
+
+# Load the necessary libraries
+library("rio")           # For importing data 
+library("tidyverse")     # For data manipulation
+library("countrycode")   # For creating the country ISO codes
+library("Hmisc")         # For labeling the variables
+```
+
+
+# Load the affilaite data
+
+```{r load-data}
+## Remove the all data
+rm(list = ls())
+
+# Load "affiliate_panel_with_affiliate_counts.rds"
+library(rio)
+FA0 <- rio::import("../../02_data_input/KSKFA.dta")
+FA0$year <- FA0$EditionYear -1 
+FA1 <- rio::import("../../03_data_output/affiliate_panel_raw.dta")
+FA5 <- rio::import("../../03_data_output/affiliate_panel_with_affiliate_counts.dta")
+
+```
+
+
+# Number of affiliates in Portugal
+
+## Original Data
+
+```{r check-data1}
+df <- FA0
+
+
+# count N of affilaites in Portugal
+  df %>% 
+    filter(KSFNationName == "ポルトガル") %>% 
+    group_by(year) %>% 
+    summarise(n = n())
+```
+
+## Data with Ownership Ratio >= 10
+
+```{r check-data2}
+
+
+df <- subset(FA0, FA0$KSFParentJPOwnRatio>=10)
+
+
+# count N of affilaites in Portugal
+  df %>% 
+    filter(KSFNationName == "ポルトガル") %>% 
+    group_by(year) %>% 
+    summarise(n = n())
+```
+
+## Data for the map
+
+```{r}
+df <- FA5
+
+# count N of affilaites in Portugal
+  df %>% 
+    filter(NationName == "ポルトガル") %>% 
+    group_by(year) %>% 
+    summarise(n = n())
+```

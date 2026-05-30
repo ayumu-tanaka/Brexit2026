@@ -1,0 +1,29 @@
+\begin{table}[!ht]
+\centering
+\caption{\label{tab:export-latex}Impact of Brexit Referendum on Japanese FDI (2x2 DiD)\label{tab:2x2did_aggregate}}
+\centering
+\begin{threeparttable}
+\begin{tabular}[t]{lccc}
+\toprule
+  & Total Affiliates & Exits & New Entry\\
+\midrule
+UK & 1.532*** & 1.684*** & 1.588***\\
+ & (0.383) & (0.326) & (0.347)\\
+Post-Referendum & 0.051 & -0.047 & 0.078\\
+ & (0.033) & (0.073) & \vphantom{1} (0.085)\\
+UK x Post-Referendum & -0.040 & 0.004 & -0.298***\\
+ & (0.033) & (0.073) & (0.085)\\
+\midrule
+Num.Obs. & 5040 & 5040 & 5040\\
+$\left|\textrm{New Entry DiD}\right| - \left|\textrm{Exit DiD}\right|$ &  &  & 0.294*\\
+ &  &  & (0.118)\\
+Equality test p-value &  &  & 0.013\\
+Pseudo R-squared & 0.091 & 0.082 & 0.055\\
+\bottomrule
+\end{tabular}
+
+\end{threeparttable}\par\medskip
+\parbox{\linewidth}{\footnotesize Notes: Standard errors clustered by host country are reported in parentheses. The estimates use country-industry-survey-year outcomes. The dependent variables are the total number of Japanese affiliates, the number of exits, and the number of new entries, respectively. All models are estimated using Poisson Pseudo Maximum Likelihood (PPML). The row $\left|\textrm{New Entry DiD}\right| - \left|\textrm{Exit DiD}\right|$ reports the difference in absolute values of the new-entry and exit DiD coefficients, computed via the delta method from a stacked PPML model with margin-by-treatment interactions (assuming opposite signs: exit DiD $>$ 0, entry DiD $<$ 0); its p-value tests equality of the absolute magnitudes. The comparison group consists of 11 high-income EU countries (AUT, BEL, DNK, FIN, FRA, DEU, IRL, ITA, LUX, NLD, SWE). * p $<$ 0.05, ** p $<$ 0.01, *** p $<$ 0.001.
+}
+
+\end{table}

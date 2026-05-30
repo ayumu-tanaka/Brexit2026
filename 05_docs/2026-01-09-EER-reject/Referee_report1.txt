@@ -1,0 +1,23 @@
+Referee 1, Comment 3 (Pooled Results) - memo
+
+We implemented additional pooled DiD specifications using only the biennial-compatible sample:
+2010, 2012, 2014, 2016, 2018, and 2020.
+
+What we tried:
+- Affiliate-level exit probability: pooled post-2016 DiD
+- Country-industry-year exit count: pooled Poisson QMLE DiD
+- Country-industry-year new entry count: pooled Poisson QMLE DiD
+
+Main results:
+- Exit probability: small and statistically insignificant
+- Exit count: small and statistically insignificant
+- Entry count: negative, but statistically insignificant
+
+Interpretation:
+These pooled estimates do not materially strengthen the paper's main argument beyond the existing event-study results.
+They are broadly consistent with the current message of the paper:
+the referendum period did not generate a clear increase in exits, while entry effects are more negative but remain imprecisely estimated.
+
+Decision:
+At this stage, the pooled results do not seem strong enough to warrant inclusion in the main text.
+If needed, they can be mentioned in a response letter or placed in an appendix as a supplementary check.

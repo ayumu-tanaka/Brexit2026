@@ -1,0 +1,204 @@
+---
+title: "株主データへの国コード付与"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = FALSE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+
+# 準備
+
+```{r preparation}
+rm(list = ls())
+
+library("rio")
+library("tidyverse")
+```
+
+
+# データの読み込み
+
+- 入力: `shareholder_panel_raw.dta`
+- 入力: `countrycode_NationCode.dta`
+
+```{r load-data}
+SHJP       <- rio::import("../../03_data_output/ShareHolder/shareholder_panel_raw.dta")
+cc         <- rio::import("../../03_data_output/countrycode_NationCode.dta")
+```
+
+
+# NationCode の作成
+
+Stataコード相当:
+```
+gen AffiliateCode2 = string(AffiliateCode, "%08.0f")
+gen NationCode     = real(substr(AffiliateCode2, 1, 3))
+drop AffiliateCode2
+```
+
+`AffiliateCode` を8桁ゼロ埋め文字列に変換し、先頭3桁を数値型の `NationCode` として抽出する。
+
+```{r create-NationCode}
+SHJP <- SHJP %>%
+  mutate(
+    AffiliateCode2 = sprintf("%08d", as.integer(AffiliateCode)),
+    NationCode     = as.numeric(substr(AffiliateCode2, 1, 3))
+  ) %>%
+  select(-AffiliateCode2)
+```
+
+
+# 国コード対応表との接合
+
+`NationCode` をキーに `countrycode_NationCode.dta` を左結合する。
+
+```{r merge-countrycode}
+SHJP <- left_join(SHJP, cc, by = "NationCode")
+```
+
+
+# 確認
+
+```{r check}
+# NationCode ごとの件数と iso の確認
+SHJP %>%
+  count(NationCode, NationName, iso, countryname, name = "n") %>%
+  arrange(NationCode)
+```
+
+
+# データの保存
+
+```{r export-data}
+rio::export(SHJP, "../../03_data_output/ShareHolder/shareholder_panel_iso.dta")
+```
+
+
+# 親会社セクターコードの付与
+
+`JPCode` と `year` をキーに `parent_panel_with_sector_codes.dta` を左結合し、
+以下の4変数を追加する。
+
+- `Parent_SectorCode2009`
+- `Parent_SectorNameAlph`
+- `Parent_SectorClass`
+- `Parent_SectorClassNameAlph`
+
+```{r merge-sector}
+JP <- rio::import("../../03_data_output/Parent/parent_panel_with_sector_codes.dta") %>%
+  select(JPCode, year,
+         Parent_SectorCode2009, Parent_SectorNameAlph,
+         Parent_SectorClass, Parent_SectorClassNameAlph)
+
+SHJP_sector <- left_join(SHJP, JP, by = c("JPCode", "year"))
+```
+
+
+# 現地法人セクターコードの付与
+
+`AffiliateCode` と `year` をキーに `affiliate_panel_with_sector_codes.dta` を左結合し、
+以下の4変数を追加する。
+
+- `FA_SectorCode2009`
+- `FA_SectorNameAlph`
+- `FA_SectorClass`
+- `FA_SectorClassNameAlph`
+
+```{r merge-fa-sector}
+FA <- rio::import("../../03_data_output/Affiliate/affiliate_panel_with_sector_codes.dta") %>%
+  select(AffiliateCode, year,
+         FA_SectorCode2009, FA_SectorNameAlph,
+         FA_SectorClass, FA_SectorClassNameAlph,
+         AbroadOwnRatio)
+
+SHJP_sector <- left_join(SHJP_sector, FA, by = c("AffiliateCode", "year"))
+```
+
+
+# 親会社×現地法人 セクター大分類のクロス集計
+
+Stataコード相当: `tab Parent_SectorClassNameAlph FA_SectorClassNameAlph`
+
+```{r crosstab-sector}
+table(SHJP_sector$Parent_SectorClassNameAlph, SHJP_sector$FA_SectorClassNameAlph)
+```
+
+## 全体の傾向
+
+**全体的な傾向**
+
+- 観測数の大半は**製造業親会社（188,011件、60%）**が占める
+- 現地法人側も**製造業（138,262件、44%）と卸売（83,850件、27%）**が多い
+
+**対角線（同業種間）の集中**
+
+- 製造業親会社→製造業現地法人：112,766件（製造業親会社の60%）
+- 卸売親会社→卸売現地法人：26,936件（卸売親会社の42%）
+- サービス親会社→サービス現地法人：48,212件（サービス親会社の89%）
+- 同業種への直接投資が主流であることを示している
+
+**製造業＝卸売のFDIの証拠**
+
+- 製造業親会社→卸売現地法人：54,481件（製造業親会社の29%）
+- 卸売親会社→製造業現地法人：22,728件（卸売親会社の36%）
+- 製造業と卸売業の間に強い垂直統合関係がある（製造拠点＋販売拠点の組み合わせ）
+
+
+# 英国限定クロス集計
+
+Stataコード相当: `tab Parent_SectorClassNameAlph FA_SectorClassNameAlph if iso=="GBR"`
+
+```{r crosstab-sector-gbr}
+table(SHJP_sector$Parent_SectorClassNameAlph[SHJP_sector$iso == "GBR"],
+      SHJP_sector$FA_SectorClassNameAlph[SHJP_sector$iso == "GBR"])
+```
+
+## 英国の特徴
+
+全体（313,287件）と英国（10,778件、全体の3.4%）を比較すると、以下の特徴があります。
+
+**サービス業・本社機能への偏重**
+
+| 現地法人セクター | 全体 | 英国 |
+|---|---|---|
+| HeadQuarter | 3.6% | **7.8%** |
+| Service,Others | 21.8% | **35.0%** |
+| Manufacturing | 44.1% | 23.8% |
+
+- 英国では**HQ機能・サービス業の現地法人が突出して多い**
+- 製造業現地法人の比率は全体の半分程度
+
+**製造業親会社の投資先の違い**
+
+- 全体：製造業親会社→製造業現地法人が60%
+- 英国：製造業親会社→製造業現地法人は38%にとどまり、**卸売（42%）やHQ（8%）への投資が多い**
+- 英国を**製造拠点ではなく販売・統括拠点として活用**している様子がうかがえる
+
+**サービス業親会社の自業種集中**
+
+- 全体のサービス業→サービス業：89%
+- 英国のサービス業→サービス業：88%（2,703/3,057）
+- この点は全体と変わらず、**サービス業は同業種内投資の傾向が英国でも維持**されている
+
+**示唆**
+
+英国は日本企業にとって**欧州の地域統括・金融・サービス拠点**として機能しており、製造拠点としての役割は相対的に小さい。これはBrexit後に**HQ・サービス機能の欧州大陸への移転圧力**が生じやすいことを示唆する。
+
+
+# データの保存（セクターコード付き）
+
+```{r export-sector}
+rio::export(SHJP_sector, "../../03_data_output/ShareHolder/shareholder_panel_iso_sector.dta")
+```
+

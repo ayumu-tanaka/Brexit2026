@@ -1,0 +1,53 @@
+\begin{table}[ht]
+\centering
+\caption{Industry Liquidation Recovery Rates with High Asset Specificity}
+\label{tab:SpecificityHigh}
+\centering
+\begin{threeparttable}
+\begin{tabular}{llccc}
+\toprule
+\textbf{Code} & \textbf{Industry} & \textbf{Liquidation Recovery Rate} & \textbf{Asset Specificity} & \textbf{SIC} \\
+\midrule
+1210 & Construction & 0.325 & High & 15, 17 \\
+1410 & Textiles, Apparel & 0.340 & High & 22, 23 \\
+1510 & Pulp, Paper & 0.310 & High & 26 \\
+1610 & Chemicals & 0.240 & High & 28 \\
+1710 & Pharmaceuticals & 0.240 & High & 28 \\
+2510 & Electrical Machinery & 0.350 & High & 36 \\
+2810 & Other Manufacturing & 0.270 & High & 39 \\
+3510 & Communications, Broadcasting & 0.240 & High & 48 \\
+3610 & Newspapers, Publishing & 0.310 & High & 27 \\
+3710 & Video, Music & 0.310 & High & 78 \\
+3810 & Advertising & 0.310 & High & 73 \\
+3910 & Information, Systems, Software & 0.310 & High & 73 \\
+4610 & Glass, Stone \& Clay Products Wholesale & 0.330 & High & 50 \\
+4710 & Iron \& Steel, Metals Wholesale & 0.330 & High & 50 \\
+4810 & Machinery Wholesale & 0.330 & High & 50 \\
+4910 & Electrical Machinery Wholesale & 0.330 & High & 50 \\
+5010 & Transportation Equipment Wholesale & 0.330 & High & 50 \\
+5110 & Precision Instruments Wholesale & 0.330 & High & 50 \\
+5310 & Department Stores & 0.310 & High & 53 \\
+5510 & Specialty Stores & 0.173 & High & 56, 57, 59 \\
+5610 & Automobile Sales & 0.040 & High & 55 \\
+5710 & Other Retail & 0.280 & High & 59 \\
+5810 & Eating \& Drinking Places, Food Service & 0.190 & High & 58 \\
+7210 & Travel & 0.230 & High & 72 \\
+7310 & Leisure, Entertainment & 0.210 & High & 79 \\
+7410 & Consulting & 0.310 & High & 73, 87 \\
+7510 & Architectural Design & 0.310 & High & 87 \\
+7610 & Human Resources, Contract Services & 0.310 & High & 73 \\
+7710 & Building Management, Security Services & 0.270 & High & 73, 72 \\
+7810 & Machinery Repair, etc. & 0.310 & High & 73 \\
+7910 & Other Services & 0.283 & High & 72, 73, 87 \\
+8010 & Holding Companies & 0.310 & High & 73 \\
+\bottomrule
+\end{tabular}
+
+
+\begin{tablenotes}
+\item \textit{Notes: } 
+ The liquidation recovery rates from Table II of \cite{kermani2023asset} were assigned to the industries in the OJC data corresponding to their SIC codes. For industries in the OJC data that correspond to multiple SIC codes, the average value of the liquidation recovery rates of the relevant SIC codes was used. Industries with liquidation recovery rates exceeding the average value of 0.35 are defined as having low asset specificity, while those below this threshold are defined as having high asset specificity.
+ \end{tablenotes}
+\end{threeparttable}
+
+\end{table}

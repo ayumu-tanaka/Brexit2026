@@ -1,0 +1,22 @@
+\begin{table}[!ht]\centering\caption{\label{tab:entryexit\_counts\_es}The Brexit Referendum's Impact on Entry and Exit Counts: PPML ES vs OLS-TWFE ES (2010--2020)}\begin{threeparttable}\begin{tabular}{l*{8}{c}}\toprule
+\multicolumn{1}{c}{} & \multicolumn{4}{c}{EU High-Income Comparison} & \multicolumn{4}{c}{All High-Income Comparison} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}
+\multicolumn{1}{c}{} & \multicolumn{2}{c}{Entry count} & \multicolumn{2}{c}{Exit count} & \multicolumn{2}{c}{Entry count} & \multicolumn{2}{c}{Exit count} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}
+\multicolumn{1}{c}{} & \multicolumn{1}{c}{PPML ES} & \multicolumn{1}{c}{OLS ES} & \multicolumn{1}{c}{PPML ES} & \multicolumn{1}{c}{OLS ES} & \multicolumn{1}{c}{PPML ES} & \multicolumn{1}{c}{OLS ES} & \multicolumn{1}{c}{PPML ES} & \multicolumn{1}{c}{OLS ES} \\
+\midrule
+                    &\multicolumn{1}{c}{(1)}&\multicolumn{1}{c}{(2)}&\multicolumn{1}{c}{(3)}&\multicolumn{1}{c}{(4)}&\multicolumn{1}{c}{(5)}&\multicolumn{1}{c}{(6)}&\multicolumn{1}{c}{(7)}&\multicolumn{1}{c}{(8)}\\
+\midrule
+~~UK $\times$ Year 2010 [ES]&      -0.381***&      -0.359*  &       0.298***&       0.038   &      -0.279*  &      -0.324*  &       0.347***&       0.062   \\
+                    &     (0.099)   &     (0.149)   &     (0.041)   &     (0.184)   &     (0.113)   &     (0.149)   &     (0.034)   &     (0.183)   \\
+~~UK $\times$ Year 2012 [ES]&      -0.032   &       0.086   &      -0.089   &      -0.195   &      -0.005   &       0.079   &      -0.012   &      -0.170   \\
+                    &     (0.125)   &     (0.213)   &     (0.082)   &     (0.168)   &     (0.069)   &     (0.213)   &     (0.059)   &     (0.167)   \\
+~~UK $\times$ Year 2016 [ES]&      -0.368***&      -0.181   &      -0.094   &      -0.129   &      -0.194   &      -0.150   &      -0.067   &      -0.120   \\
+                    &     (0.096)   &     (0.202)   &     (0.113)   &     (0.157)   &     (0.166)   &     (0.202)   &     (0.077)   &     (0.156)   \\
+~~UK $\times$ Year 2018 [ES]&      -0.116   &      -0.088   &      -0.020   &      -0.105   &      -0.060   &      -0.076   &      -0.046   &      -0.105   \\
+                    &     (0.089)   &     (0.160)   &     (0.146)   &     (0.192)   &     (0.123)   &     (0.160)   &     (0.084)   &     (0.191)   \\
+~~UK $\times$ Year 2020 [ES]&      -0.894***&      -0.553** &       0.376** &      -0.012   &      -0.584** &      -0.482*  &       0.232*  &      -0.015   \\
+                    &     (0.102)   &     (0.192)   &     (0.139)   &     (0.152)   &     (0.214)   &     (0.192)   &     (0.100)   &     (0.152)   \\
+\midrule
+Observations        &       1,734   &       5,112   &       1,680   &       5,112   &       2,838   &       7,242   &       2,676   &       7,242   \\
+\bottomrule\end{tabular}\end{threeparttable}\par\medskip\parbox{\linewidth}{\footnotesize \textit{Notes:}  The unit of observation is industry-by-country-by-year (biennial). Columns (1)--(4) use EU high-income countries as the comparison group; columns (5)--(8) add non-EU high-income countries (CAN, AUS, CHE, KOR, NZL). Outcomes are counts of new Japanese affiliate entries and exits. Columns labeled PPML ES use pooled Poisson QMLE (ppmlhdfe) with iso-by-industry fixed effects and year fixed effects. Columns labeled OLS ES use linear TWFE event-study (reghdfe) with the same fixed effects. Because ppmlhdfe applies a separation (perfect prediction) procedure, the number of observations retained can differ substantially between entry and exit outcomes. Standard errors clustered at the country-by-industry level in parentheses. * $p<0.05$, ** $p<0.01$, *** $p<0.001$. }\end{table}

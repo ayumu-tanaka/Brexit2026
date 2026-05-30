@@ -1,0 +1,473 @@
+---
+title: "Robustness Check: UK Export-Platform Parent Firms and Affiliate Exit"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+# knitr のチャンク全体の既定オプションを設定する。
+knitr::opts_chunk$set(
+  # R コードを出力に表示する。
+  echo = TRUE,
+  # キャッシュは使わず、毎回コードを実行する。
+  cache = FALSE,
+  # パッケージ読み込みなどのメッセージを表示しない。
+  message = FALSE,
+  # 警告メッセージを表示しない。
+  warning = FALSE
+)
+```
+
+# Purpose
+
+This note implements a robustness check based on Mike's export-platform idea.
+The analysis identifies parent firms that had both:
+
+- manufacturing affiliates in the UK before Brexit
+- wholesale or retail affiliates in EU member countries before Brexit
+
+These parent firms are interpreted as candidates for using the UK as an export
+platform for the European market. The main exit event-study specification is
+then re-estimated after restricting the affiliate-level sample to affiliates
+belonging to these parent firms.
+
+# Packages
+
+```{r packages}
+# データ加工、可視化、パイプ演算子などをまとめて読み込む。
+library(tidyverse)
+# Stata ファイルなどの入出力に使う。
+library(rio)
+# 固定効果モデルとイベントスタディ推定に使う。
+library(fixest)
+# kable による表出力に使う。
+library(knitr)
+# HTML/LaTeX 表の追加整形に使う。
+library(kableExtra)
+```
+
+# Inputs and definitions
+
+```{r inputs}
+# Brexit 推定用の全サンプル affiliate パネルのパスを指定する。
+path_full <- "../../03_data_output/affiliate_panel_brexit_full_sample.dta"
+# high-income EU 対照群を使う affiliate exit サンプルのパスを指定する。
+path_high_income_eu <- "../../03_data_output/affiliate_panel_brexit_high_income_eu_sample.dta"
+# EU 対照群を使う affiliate exit サンプルのパスを指定する。
+path_eu <- "../../03_data_output/affiliate_panel_brexit_eu_sample.dta"
+
+# Use only pre-Brexit years to classify parent firms.
+# This avoids defining export-platform status with post-treatment information.
+# 親会社の export-platform 候補分類には Brexit 前の年だけを使う。
+pre_brexit_years <- c(2010, 2012, 2014)
+# 推定に使う年の範囲を指定する。
+keep_years <- 2010:2020
+
+# Toyo Keizai broad sector classes.
+# 東洋経済の大分類で製造業を表すコードを指定する。
+sector_manufacturing <- 20L
+# 東洋経済の大分類で卸売・小売を表すコードを指定する。
+sector_sales_wholesale <- c(30L, 40L)
+
+# EU member countries excluding the UK. This list is used only for identifying
+# whether a parent firm had EU sales/wholesale affiliates before Brexit.
+# 英国を除く EU 加盟国の ISO3 コードを定義する。
+eu27 <- c(
+  # EU27 の ISO3 コードを列挙する。
+  "AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA",
+  # EU27 の ISO3 コードを列挙する。
+  "DEU", "GRC", "HUN", "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD",
+  # EU27 の ISO3 コードを列挙する。
+  "POL", "PRT", "ROU", "SVK", "SVN", "ESP", "SWE"
+)
+```
+
+# Helper functions
+
+```{r helpers}
+# 国コード列の名前を既存データ間で揃える関数を定義する。
+standardize_country_column <- function(df) {
+  # `iso` 列があり、`country` 列がない場合だけ列名を変更する。
+  if ("iso" %in% names(df) && !"country" %in% names(df)) {
+    # `iso` という列名を `country` に置き換える。
+    names(df)[names(df) == "iso"] <- "country"
+  }
+
+  # 列名を揃えたデータフレームを返す。
+  df
+}
+
+# TWFE の exit イベントスタディを推定する関数を定義する。
+estimate_twfe_exit <- function(df) {
+  # affiliate 固定効果と年固定効果を入れたイベントスタディを推定する。
+  feols(
+    # 年ダミーと英国ダミーの相互作用を入れ、2014年を基準年にする。
+    exitit ~ i(year, GBR, 2014) | year + AffiliateCode,
+    # 関数に渡されたデータを推定に使う。
+    data = df,
+    # 標準誤差は国レベルでクラスタリングする。
+    vcov = ~country
+  )
+}
+
+# pooled DiD 型の exit 推定を行う関数を定義する。
+estimate_pooled_exit <- function(df) {
+  # Brexit ダミーを使った二方向固定効果モデルを推定する。
+  feols(
+    # Brexit 期間の英国効果を推定する。
+    exitit ~ Brexit | year + AffiliateCode,
+    # 関数に渡されたデータを推定に使う。
+    data = df,
+    # 標準誤差は国レベルでクラスタリングする。
+    vcov = ~country
+  )
+}
+
+```
+
+# Identify UK export-platform parent firms
+
+```{r identify-parents}
+# 全サンプルの affiliate パネルを読み込む。
+aff_full <- import(path_full) %>%
+  # 国コード列を `country` に揃える。
+  standardize_country_column() %>%
+  # 親会社分類に使う Brexit 前の年だけに絞る。
+  filter(year %in% pre_brexit_years) %>%
+  # 各 affiliate 観測が UK 製造・EU販売/卸売に該当するかを判定する。
+  mutate(
+    # 英国に所在し、FA_SectorClass が製造業なら TRUE にする。
+    is_uk_manufacturing = country == "GBR" &
+      # セクター分類が欠損していないことを確認する。
+      !is.na(FA_SectorClass) &
+      # セクター分類が製造業コードと一致するかを判定する。
+      FA_SectorClass == sector_manufacturing,
+    # EU27 に所在し、FA_SectorClass が卸売・小売なら TRUE にする。
+    is_eu_sales_wholesale = country %in% eu27 &
+      # セクター分類が欠損していないことを確認する。
+      !is.na(FA_SectorClass) &
+      # セクター分類が卸売・小売コードのいずれかと一致するかを判定する。
+      FA_SectorClass %in% sector_sales_wholesale
+  )
+
+# 親会社ごとに export-platform 候補かどうかを集計する。
+parent_export_platform <- aff_full %>%
+  # 親会社コードでグループ化する。
+  group_by(JPCode) %>%
+  # 親会社単位の UK 製造・EU販売/卸売の有無と規模を集計する。
+  summarise(
+    # Brexit 前に英国製造子会社を持っていたかを判定する。
+    uk_manufacturing_pre = any(is_uk_manufacturing, na.rm = TRUE),
+    # Brexit 前に EU27 販売・卸売子会社を持っていたかを判定する。
+    eu_sales_wholesale_pre = any(is_eu_sales_wholesale, na.rm = TRUE),
+    # Brexit 前の英国製造子会社数を数える。
+    n_uk_manufacturing_affiliates_pre = n_distinct(
+      # UK 製造に該当する affiliate のコードだけを数える。
+      AffiliateCode[is_uk_manufacturing]
+    ),
+    # Brexit 前の EU27 販売・卸売子会社数を数える。
+    n_eu_sales_wholesale_affiliates_pre = n_distinct(
+      # EU27 販売・卸売に該当する affiliate のコードだけを数える。
+      AffiliateCode[is_eu_sales_wholesale]
+    ),
+    # Brexit 前に販売・卸売子会社を持っていた EU27 国数を数える。
+    n_eu_sales_wholesale_countries_pre = n_distinct(
+      # EU27 販売・卸売に該当する国コードだけを数える。
+      country[is_eu_sales_wholesale]
+    ),
+    # summarise 後にグループ化を解除する。
+    .groups = "drop"
+  ) %>%
+  # UK 製造と EU 販売・卸売の両方を持つ親会社を候補として定義する。
+  mutate(
+    # 2条件を同時に満たす場合に TRUE とする。
+    uk_export_platform_parent = uk_manufacturing_pre & eu_sales_wholesale_pre
+  )
+
+# export-platform 候補親会社の ID ベクトルを作る。
+export_platform_parent_ids <- parent_export_platform %>%
+  # 候補親会社だけに絞る。
+  filter(uk_export_platform_parent) %>%
+  # 親会社コードだけを取り出す。
+  pull(JPCode)
+
+# 親会社分類のクロス集計を作る。
+parent_export_platform %>%
+  # UK 製造の有無、EU 販売・卸売の有無、候補フラグごとに件数を数える。
+  count(uk_manufacturing_pre, eu_sales_wholesale_pre, uk_export_platform_parent) %>%
+  # 候補親会社が上に来るように並べる。
+  arrange(desc(uk_export_platform_parent), desc(n)) %>%
+  # 集計結果を表として表示する。
+  kable(
+    # 表のキャプションを指定する。
+    caption = "Parent-firm classification using pre-Brexit affiliate locations and sector classes"
+  )
+```
+
+```{r parent-summary}
+# export-platform 候補親会社の特徴を要約する。
+parent_export_platform %>%
+  # UK export-platform 候補親会社だけに絞る。
+  filter(uk_export_platform_parent) %>%
+  # 候補親会社数や平均的な子会社数を集計する。
+  summarise(
+    # 候補親会社の数を数える。
+    parent_firms = n_distinct(JPCode),
+    # 候補親会社あたりの英国製造子会社数の平均を計算する。
+    mean_uk_manufacturing_affiliates = mean(n_uk_manufacturing_affiliates_pre),
+    # 候補親会社あたりの EU 販売・卸売子会社数の平均を計算する。
+    mean_eu_sales_wholesale_affiliates = mean(n_eu_sales_wholesale_affiliates_pre),
+    # 候補親会社あたりの EU 販売・卸売拠点国数の平均を計算する。
+    mean_eu_sales_wholesale_countries = mean(n_eu_sales_wholesale_countries_pre),
+    # 候補親会社あたりの EU 販売・卸売拠点国数の中央値を計算する。
+    median_eu_sales_wholesale_countries = median(n_eu_sales_wholesale_countries_pre)
+  ) %>%
+  # 数値列を小数第3位に丸める。
+  mutate(across(where(is.numeric), ~round(.x, 3))) %>%
+  # 要約結果を表として表示する。
+  kable(caption = "Summary of UK export-platform candidate parent firms")
+```
+
+# Prepare exit samples
+
+```{r prepare-exit-samples}
+# high-income EU サンプルを読み込む。
+aff_high_income_eu <- import(path_high_income_eu) %>%
+  # 国コード列を `country` に揃える。
+  standardize_country_column() %>%
+  # 推定対象年に絞る。
+  filter(year %in% keep_years) %>%
+  # 親会社レベルの export-platform 候補フラグを結合する。
+  left_join(
+    # 結合に必要な親会社コードと候補フラグだけを残す。
+    parent_export_platform %>%
+      # 親会社コードと候補フラグを選択する。
+      select(JPCode, uk_export_platform_parent),
+    # 親会社コードで結合する。
+    by = "JPCode"
+  ) %>%
+  # 分類表に存在しない親会社は候補ではないものとして FALSE にする。
+  mutate(uk_export_platform_parent = replace_na(uk_export_platform_parent, FALSE))
+
+# EU サンプルを読み込む。
+aff_eu <- import(path_eu) %>%
+  # 国コード列を `country` に揃える。
+  standardize_country_column() %>%
+  # 推定対象年に絞る。
+  filter(year %in% keep_years) %>%
+  # 親会社レベルの export-platform 候補フラグを結合する。
+  left_join(
+    # 結合に必要な親会社コードと候補フラグだけを残す。
+    parent_export_platform %>%
+      # 親会社コードと候補フラグを選択する。
+      select(JPCode, uk_export_platform_parent),
+    # 親会社コードで結合する。
+    by = "JPCode"
+  ) %>%
+  # 分類表に存在しない親会社は候補ではないものとして FALSE にする。
+  mutate(uk_export_platform_parent = replace_na(uk_export_platform_parent, FALSE))
+
+# high-income EU サンプルを export-platform 候補親会社に属する観測だけに絞る。
+aff_high_income_eu_export_platform <- aff_high_income_eu %>%
+  # 候補親会社フラグが TRUE の観測だけを残す。
+  filter(uk_export_platform_parent)
+
+# EU サンプルを export-platform 候補親会社に属する観測だけに絞る。
+aff_eu_export_platform <- aff_eu %>%
+  # 候補親会社フラグが TRUE の観測だけを残す。
+  filter(uk_export_platform_parent)
+
+# 推定サンプルごとの観測数・affiliate 数・親会社数を確認する。
+bind_rows(
+  # high-income EU の全親会社サンプルにラベルを付ける。
+  aff_high_income_eu %>% mutate(sample = "High-income EU: all parents"),
+  # high-income EU の候補親会社サンプルにラベルを付ける。
+  aff_high_income_eu_export_platform %>% mutate(sample = "High-income EU: UK export-platform parents"),
+  # EU の全親会社サンプルにラベルを付ける。
+  aff_eu %>% mutate(sample = "EU: all parents"),
+  # EU の候補親会社サンプルにラベルを付ける。
+  aff_eu_export_platform %>% mutate(sample = "EU: UK export-platform parents")
+) %>%
+  # サンプルラベルごとに集計する。
+  group_by(sample) %>%
+  # 各サンプルの構成を集計する。
+  summarise(
+    # 観測数を数える。
+    observations = n(),
+    # affiliate 数を数える。
+    affiliates = n_distinct(AffiliateCode),
+    # 親会社数を数える。
+    parent_firms = n_distinct(JPCode),
+    # 英国 affiliate 数を数える。
+    uk_affiliates = n_distinct(AffiliateCode[country == "GBR"]),
+    # 比較国 affiliate 数を数える。
+    comparison_affiliates = n_distinct(AffiliateCode[country != "GBR"]),
+    # summarise 後にグループ化を解除する。
+    .groups = "drop"
+  ) %>%
+  # サンプルサイズ表として表示する。
+  kable(caption = "Exit estimation sample sizes")
+```
+
+# TWFE event-study estimates
+
+```{r twfe-estimates}
+# high-income EU の全親会社サンプルで TWFE イベントスタディを推定する。
+twfe_high_income_eu_all <- estimate_twfe_exit(aff_high_income_eu)
+# high-income EU の export-platform 候補親会社サンプルで TWFE イベントスタディを推定する。
+twfe_high_income_eu_export_platform <- estimate_twfe_exit(aff_high_income_eu_export_platform)
+
+# EU の全親会社サンプルで TWFE イベントスタディを推定する。
+twfe_eu_all <- estimate_twfe_exit(aff_eu)
+# EU の export-platform 候補親会社サンプルで TWFE イベントスタディを推定する。
+twfe_eu_export_platform <- estimate_twfe_exit(aff_eu_export_platform)
+
+# 4つの TWFE 推定結果を横並びで表示する。
+etable(
+  # high-income EU の全親会社サンプルの推定結果を表示する。
+  twfe_high_income_eu_all,
+  # high-income EU の候補親会社サンプルの推定結果を表示する。
+  twfe_high_income_eu_export_platform,
+  # EU の全親会社サンプルの推定結果を表示する。
+  twfe_eu_all,
+  # EU の候補親会社サンプルの推定結果を表示する。
+  twfe_eu_export_platform,
+  # 表の列見出しを指定する。
+  headers = c(
+    # 1列目の見出しを指定する。
+    "HI EU: all",
+    # 2列目の見出しを指定する。
+    "HI EU: export-platform parents",
+    # 3列目の見出しを指定する。
+    "EU: all",
+    # 4列目の見出しを指定する。
+    "EU: export-platform parents"
+  )
+)
+```
+
+```{r twfe-plot, fig.width=8, fig.height=5}
+# high-income EU 比較で、全親会社サンプルと候補親会社サンプルのイベントスタディ図を描く。
+fixest::iplot(
+  # 2つのモデルを同じ図に重ねる。
+  list(
+    # 全親会社サンプルのイベントスタディ結果を指定する。
+    twfe_high_income_eu_all,
+    # 候補親会社サンプルのイベントスタディ結果を指定する。
+    twfe_high_income_eu_export_platform
+  ),
+  # 推定点を線で結ぶ。
+  pt.join = TRUE,
+  # 2014年を基準年として縦線を引く。
+  ref.line = 2014,
+  # 横軸ラベルを指定する。
+  xlab = "Year",
+  # 縦軸ラベルを指定する。
+  ylab = "Effect on exit probability",
+  # 図タイトルを指定する。
+  main = "Brexit effect on exit: high-income EU comparison"
+)
+# 図に凡例を追加する。
+legend(
+  # 凡例の位置を左上に指定する。
+  "topleft",
+  # 凡例に表示する系列名を指定する。
+  legend = c("All parents", "UK export-platform parents"),
+  # 系列の色を指定する。
+  col = 1:2,
+  # 点の形を指定する。
+  pch = 20,
+  # 線の種類を指定する。
+  lty = 1,
+  # 凡例の枠線を消す。
+  bty = "n"
+)
+```
+
+```{r twfe-plot-eu, fig.width=8, fig.height=5}
+# EU 比較で、全親会社サンプルと候補親会社サンプルのイベントスタディ図を描く。
+fixest::iplot(
+  # 2つのモデルを同じ図に重ねる。
+  list(
+    # 全親会社サンプルのイベントスタディ結果を指定する。
+    twfe_eu_all,
+    # 候補親会社サンプルのイベントスタディ結果を指定する。
+    twfe_eu_export_platform
+  ),
+  # 推定点を線で結ぶ。
+  pt.join = TRUE,
+  # 2014年を基準年として縦線を引く。
+  ref.line = 2014,
+  # 横軸ラベルを指定する。
+  xlab = "Year",
+  # 縦軸ラベルを指定する。
+  ylab = "Effect on exit probability",
+  # 図タイトルを指定する。
+  main = "Brexit effect on exit: EU comparison"
+)
+# 図に凡例を追加する。
+legend(
+  # 凡例の位置を左上に指定する。
+  "topleft",
+  # 凡例に表示する系列名を指定する。
+  legend = c("All parents", "UK export-platform parents"),
+  # 系列の色を指定する。
+  col = 1:2,
+  # 点の形を指定する。
+  pch = 20,
+  # 線の種類を指定する。
+  lty = 1,
+  # 凡例の枠線を消す。
+  bty = "n"
+)
+```
+
+# Pooled DiD estimates
+
+```{r pooled-estimates}
+# high-income EU の全親会社サンプルで pooled DiD を推定する。
+pooled_high_income_eu_all <- estimate_pooled_exit(aff_high_income_eu)
+# high-income EU の export-platform 候補親会社サンプルで pooled DiD を推定する。
+pooled_high_income_eu_export_platform <- estimate_pooled_exit(aff_high_income_eu_export_platform)
+
+# EU の全親会社サンプルで pooled DiD を推定する。
+pooled_eu_all <- estimate_pooled_exit(aff_eu)
+# EU の export-platform 候補親会社サンプルで pooled DiD を推定する。
+pooled_eu_export_platform <- estimate_pooled_exit(aff_eu_export_platform)
+
+# 4つの pooled DiD 推定結果を横並びで表示する。
+etable(
+  # high-income EU の全親会社サンプルの推定結果を表示する。
+  pooled_high_income_eu_all,
+  # high-income EU の候補親会社サンプルの推定結果を表示する。
+  pooled_high_income_eu_export_platform,
+  # EU の全親会社サンプルの推定結果を表示する。
+  pooled_eu_all,
+  # EU の候補親会社サンプルの推定結果を表示する。
+  pooled_eu_export_platform,
+  # 表の列見出しを指定する。
+  headers = c(
+    # 1列目の見出しを指定する。
+    "HI EU: all",
+    # 2列目の見出しを指定する。
+    "HI EU: export-platform parents",
+    # 3列目の見出しを指定する。
+    "EU: all",
+    # 4列目の見出しを指定する。
+    "EU: export-platform parents"
+  )
+)
+```
+
+# Interpretation
+
+The key robustness check is the comparison between the all-parent sample and
+the restricted sample of UK export-platform candidate parent firms. If the
+post-Brexit exit response remains positive, or becomes larger, in the restricted
+sample, this is consistent with the mechanism that Brexit made UK-based
+export-platform operations less attractive for Japanese multinational firms.

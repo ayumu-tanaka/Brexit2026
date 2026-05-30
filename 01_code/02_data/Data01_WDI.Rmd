@@ -1,0 +1,61 @@
+---
+title: "世界開発指標データの取得"
+author: "Ayumu Tanaka"
+date: "2024-05-23"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+
+# WDIパッケージの準備
+
+- The World Development Indicators (WDI) package is a R package to download and use the World Bank's World Development Indicators database.
+- [WDI package](https://github.com/vincentarelbundock/WDI)
+
+```
+# WDIパッケージのインストール
+install.packages("WDI")
+```
+
+# WDIパッケージの読み込みと指標検索
+```{r}
+# WDIパッケージの読み込み
+library(WDI)
+
+# GDP（PPPベース）の検索
+WDIsearch("GDP, PPP")
+
+# 一人当たりGDP（PPPベース）の検索
+WDIsearch("GDP per capita, PPP")
+```
+
+# データの取得
+- NY.GDP.MKTP.KD.ZG	GDP growth (annual %)
+- NY.GDP.MKTP.PP.KD	GDP, PPP (constant 2017 international $)
+- NY.GDP.PCAP.PP.KD	GDP per capita, PPP (constant 2017 international $)
+- HD.HCI.OVRL	Human capital index (HCI) (scale 0-1)
+- IC.BUS.DFRN.XQ	Ease of doing business score (0 = lowest performance to 100 = best performance)
+
+```{r}
+# WDIデータのダウンロード
+WDI <- WDI(indicator = c("GDP_PPP" = "NY.GDP.MKTP.PP.KD", 
+                         "GDP_per_capita" = "NY.GDP.PCAP.PP.KD",
+                         "GDP_growth" = "NY.GDP.MKTP.KD.ZG",
+                         "Ease_business" = "IC.BUS.DFRN.XQ"), 
+              start = 1989, end = 2023)
+
+# データの保存
+library(rio)
+export(WDI, "../../02_data_input/WDI.rds")
+```

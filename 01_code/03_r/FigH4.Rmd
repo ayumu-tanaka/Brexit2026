@@ -1,0 +1,362 @@
+---
+title: "Appendix H. Affiliate-Level Exit Responses by Brexit MFN Risk Exposure"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+# チャンク全体の表示設定をまとめて指定する。
+knitr::opts_chunk$set(
+# Rコード自体は表示する。
+  echo = TRUE,
+# キャッシュは使わず毎回計算する。
+  cache = FALSE,
+# パッケージ読み込み時のメッセージは隠す。
+  message = FALSE,
+# 警告メッセージは隠す。
+  warning = FALSE
+)
+```
+
+# Purpose
+
+This appendix figure adapts the spirit of `Fig8.Rmd` to the new three-way
+industry classification:
+
+- `high`: high MFN risk / large Brexit exposure
+- `low`: low MFN risk / small Brexit exposure
+- `service`: service sectors
+
+The goal is to see whether dynamic Brexit effects differ across these three
+groups for affiliate exit probability.
+
+The goal is to examine whether affiliate-level exit responses to the Brexit
+referendum differ across these three industry groups.
+
+# Packages
+
+```{r packages}
+# データ加工と集計に使う。
+library(tidyverse)
+# Stataファイルの入出力に使う。
+library(rio)
+# イベントスタディ推定と iplot に使う。
+library(fixest)
+# CSV を安定して読むために使う。
+library(readr)
+# 表を整形して表示するために使う。
+library(knitr)
+```
+
+# Inputs
+
+```{r paths}
+# 退出分析に使う high-income EU サンプルのパスを指定する。
+path_exit <- "../../03_data_output/Affiliate/affiliate_panel_brexit_high_income_eu_sample.dta"
+# 今回作成した BrexitMFN3 の対応表のパスを指定する。
+path_mfn3 <- "../../02_data_input/SectorCode2009_BrexitMFN3.csv"
+
+# 分析対象年を 2010-2020 に限定する。
+keep_years <- c(2010, 2012, 2014, 2016, 2018, 2020)
+# 図の横軸に明示的に出したいイベント年を定義する。
+event_years <- c(2010, 2012, 2016, 2018, 2020)
+# BrexitMFN3 の表示順を固定する。
+group_levels <- c("high", "low", "service")
+# 図や表で見やすい表示名を用意する。
+group_labels <- c(
+  high = "High MFN Risk",
+  low = "Low MFN Risk",
+  service = "Services"
+)
+```
+
+# Helper functions
+
+```{r helpers}
+# データセットごとの列名の違いを吸収する関数を作る。
+standardize_affiliate_panel <- function(df) {
+  # `iso` しか無い場合は `country` に名前を揃える。
+  if ("iso" %in% names(df) && !"country" %in% names(df)) {
+    names(df)[names(df) == "iso"] <- "country"
+  }
+
+  # `FA_SectorCode2009` しか無い場合は `FASector` に名前を揃える。
+  if ("FA_SectorCode2009" %in% names(df) && !"FASector" %in% names(df)) {
+    names(df)[names(df) == "FA_SectorCode2009"] <- "FASector"
+  }
+
+  # 列名を揃えたデータを返す。
+  df
+}
+
+# モデルごとの観測数と R2 を凡例用の文字列に整形する関数を作る。
+make_legend_label <- function(model, group_name) {
+  # 観測数を数値として取り出す。
+  model_n <- as.numeric(model[["nobs"]])
+  # R2 を小数第3位までで取り出す。
+  model_r2 <- round(as.numeric(fixest::fitstat(model, "r2")), 3)
+  # グループ名と統計量を1本の文字列にまとめる。
+  sprintf("%s (N = %s, R-squared = %.3f)", group_labels[[group_name]], model_n, model_r2)
+}
+```
+
+# Load BrexitMFN3 classification
+
+```{r load-mfn3}
+# BrexitMFN3 の CSV を読む。
+mfn3_map <- read_csv(path_mfn3, show_col_types = FALSE) %>%
+  # 結合に必要な 2 列だけに絞る。
+  transmute(
+    FASector = as.integer(SectorCode2009),
+    BrexitMFN3 = factor(BrexitMFN3, levels = group_levels)
+  ) %>%
+  # セクターコードごとの重複があれば最初の1件だけ残す。
+  distinct(FASector, .keep_all = TRUE)
+
+# まず分類ごとのセクター数を確認する。
+mfn3_map %>%
+  # グループ別件数を集計する。
+  count(BrexitMFN3) %>%
+  # 英語ラベルを見やすい形で付ける。
+  mutate(label = group_labels[as.character(BrexitMFN3)]) %>%
+  # 表に出す列だけを残す。
+  select(label, n) %>%
+  # HTML/PDF に表として出力する。
+  kable(caption = "Number of sector codes in each BrexitMFN3 group")
+```
+
+# Exit analysis
+
+## Load and prepare exit panel
+
+```{r load-exit}
+# 退出分析用データを読み込む。
+aff_exit <- import(path_exit) %>%
+  # 列名を標準化する。
+  standardize_affiliate_panel() %>%
+  # 対象年だけに絞る。
+  filter(year %in% keep_years) %>%
+  # SectorCode ごとに BrexitMFN3 を結合する。
+  left_join(mfn3_map, by = "FASector") %>%
+  # 分類不能な行は落とす。
+  filter(!is.na(BrexitMFN3))
+
+# グループごとの退出パネル観測数を確認する。
+aff_exit %>%
+  # グループ別件数を集計する。
+  count(BrexitMFN3) %>%
+  # 表示用ラベルを付ける。
+  mutate(label = group_labels[as.character(BrexitMFN3)]) %>%
+  # 必要列だけ残す。
+  select(label, n) %>%
+  # 表として出力する。
+  kable(caption = "Exit panel observations by BrexitMFN3")
+```
+
+## Estimate Fig8-style exit event studies
+
+```{r exit-models}
+# BrexitMFN3 ごとにデータを 3 分割する。
+exit_split <- split(aff_exit, aff_exit$BrexitMFN3)
+
+# 各グループで Fig8 と同型の退出イベントスタディを回す。
+exit_models <- lapply(group_levels, function(group_name) {
+  # 年ダミーと GBR の相互作用を入れ、Affiliate FE と year FE を入れる。
+  feols(
+    exitit ~ i(year, GBR, 2014) | year + AffiliateCode,
+    # 対応するグループのデータを使う。
+    data = exit_split[[group_name]],
+    # 標準誤差は country クラスタにする。
+    vcov = ~country
+  )
+})
+# リスト要素にグループ名を付ける。
+names(exit_models) <- group_levels
+
+# 3 グループの退出推定結果を横並びで確認する。
+etable(exit_models$high, exit_models$low, exit_models$service)
+```
+
+## Tests of differences across groups
+
+```{r exit-difference-tests}
+# high 群と low 群をまとめて、群ごとのイベント係数差を直接検定できる形にする。
+exit_high_low <- aff_exit %>%
+  # high と low だけを残す。
+  filter(BrexitMFN3 %in% c("high", "low")) %>%
+  # 基準カテゴリを high にしておく。
+  mutate(BrexitMFN3 = relevel(BrexitMFN3, ref = "high"))
+
+# high 群と service 群をまとめて、群ごとの差を直接検定できる形にする。
+exit_high_service <- aff_exit %>%
+  # high と service だけを残す。
+  filter(BrexitMFN3 %in% c("high", "service")) %>%
+  # 基準カテゴリを high にしておく。
+  mutate(BrexitMFN3 = relevel(BrexitMFN3, ref = "high"))
+
+# high と low の係数差を年ごとに推定する。
+model_high_low <- feols(
+  exitit ~ i(year, GBR, ref = 2014) * BrexitMFN3 | year + AffiliateCode,
+  data = exit_high_low,
+  vcov = ~country
+)
+
+# high と service の係数差を年ごとに推定する。
+model_high_service <- feols(
+  exitit ~ i(year, GBR, ref = 2014) * BrexitMFN3 | year + AffiliateCode,
+  data = exit_high_service,
+  vcov = ~country
+)
+
+# high-low の 2018 年差を検定する。
+wald_high_low_2018 <- wald(
+  model_high_low,
+  "BrexitMFN3high:year::2018:GBR = 0"
+)
+
+# high-low の 2020 年差を検定する。
+wald_high_low_2020 <- wald(
+  model_high_low,
+  "BrexitMFN3high:year::2020:GBR = 0"
+)
+
+# high-service の 2018 年差を検定する。
+wald_high_service_2018 <- wald(
+  model_high_service,
+  "BrexitMFN3high:year::2018:GBR = 0"
+)
+
+# high-service の 2020 年差を検定する。
+wald_high_service_2020 <- wald(
+  model_high_service,
+  "BrexitMFN3high:year::2020:GBR = 0"
+)
+
+# 検定結果を見やすい表にまとめる。
+bind_rows(
+  tibble(
+    comparison = "High vs Low",
+    year = 2018,
+    p_value = as.numeric(wald_high_low_2018)
+  ),
+  tibble(
+    comparison = "High vs Low",
+    year = 2020,
+    p_value = as.numeric(wald_high_low_2020)
+  ),
+  tibble(
+    comparison = "High vs Service",
+    year = 2018,
+    p_value = as.numeric(wald_high_service_2018)
+  ),
+  tibble(
+    comparison = "High vs Service",
+    year = 2020,
+    p_value = as.numeric(wald_high_service_2020)
+  )
+) %>%
+  # 小数第4位までで表にする。
+  mutate(p_value = round(p_value, 4)) %>%
+  kable(caption = "Wald tests for differences in exit effects across groups")
+```
+
+# Plot for Appendix H
+
+```{r plots, fig.width=11, fig.height=5}
+# 退出図の凡例ラベルを Fig8 風に作る。
+exit_legend_high <- make_legend_label(exit_models$high, "high")
+# 退出図の凡例ラベルを Fig8 風に作る。
+exit_legend_low <- make_legend_label(exit_models$low, "low")
+# 退出図の凡例ラベルを Fig8 風に作る。
+exit_legend_service <- make_legend_label(exit_models$service, "service")
+
+# 後で元の描画設定に戻せるよう現在の par を保存する。
+old_par <- par(no.readonly = TRUE)
+# チャンク終了時に par を元に戻す。
+on.exit(par(old_par))
+
+# 図を 1 枚だけ描く。
+par(mfrow = c(1, 1))
+# 余白を Fig8 に近い形に少し広めに取る。
+par(mar = c(4, 4.2, 3.2, 1))
+
+# 退出モデル 3 本を Fig8 と同じ iplot スタイルで描く。
+iplot(
+  list(exit_models$high, exit_models$low, exit_models$service),
+  pt.join = TRUE,
+  main = "Effect of the Brexit referendum on exit probability",
+  sub = "High-income EU affiliate-level balanced panel",
+  xlab = "Linear probability model. Two-year intervals."
+)
+# 凡例を左上に追加する。
+legend(
+  "bottomright",
+  col = 1:3,
+  pch = 9,
+  cex = 0.9,
+  lwd = 1,
+  lty = 1:3,
+  legend = c(exit_legend_high, exit_legend_low, exit_legend_service),
+  title = "Sector"
+)
+```
+
+# Notes
+
+```{r notes}
+# この付録図の設計メモを表にまとめる。
+note_tbl <- tibble(
+  # 行ラベルを定義する。
+  item = c(
+    "Exit specification",
+    "Reference year",
+    "Sample",
+    "Classification"
+  ),
+  # 各行の説明文を定義する。
+  detail = c(
+    "Affiliate-level event study with year and affiliate fixed effects, following the spirit of Fig8.",
+    "2014",
+    "High-income EU sample.",
+    "BrexitMFN3 = high / low / service, based on SectorCode2009_BrexitMFN3.csv."
+  )
+)
+
+# メモ表を出力する。
+note_tbl %>%
+  kable(caption = "Design notes for Appendix H Figure H4")
+```
+
+# Export EPS
+
+```{r export-eps}
+# EPS デバイスを開いて付録図の保存先を指定する。
+postscript(
+  "../../04_tex/main/FigH4.eps",
+  horizontal = FALSE,
+  width = 8,
+  height = 6
+)
+# 図を 1 枚だけ描く。
+par(mfrow = c(1, 1))
+# 余白を調整する。
+par(mar = c(4, 4.2, 3.2, 1))
+# 退出図を保存用に描く。
+iplot(
+  list(exit_models$high, exit_models$low, exit_models$service),
+  pt.join = TRUE,
+  main = "Effect of the Brexit referendum on exit probability",
+  sub = "High-income EU affiliate-level balanced panel",
+  xlab = "Linear probability model. Two-year intervals."
+)
+# 退出図の凡例を保存用にも描く。
+legend("bottomright", col = 1:3, pch = 9, cex = 0.9, lwd = 1, lty = 1:3,
+       legend = c(exit_legend_high, exit_legend_low, exit_legend_service), title = "Sector")
+# デバイスを閉じて保存を完了する。
+dev.off()
+```

@@ -1,0 +1,41 @@
+\begin{table}
+\centering
+\caption{\label{tab:modelsummary-aff}Cox regression model at affiliate-level}
+\centering
+\begin{threeparttable}
+\begin{tabular}[t]{lcccc}
+\toprule
+\multicolumn{1}{c}{ } & \multicolumn{2}{c}{World} & \multicolumn{2}{c}{Europe only} \\
+\cmidrule(l{3pt}r{3pt}){2-3} \cmidrule(l{3pt}r{3pt}){4-5}
+\multicolumn{1}{c}{ } & \multicolumn{1}{c}{(1)} & \multicolumn{1}{c}{(2)} & \multicolumn{1}{c}{(3)} & \multicolumn{1}{c}{(4)} \\
+\cmidrule(l{3pt}r{3pt}){2-2} \cmidrule(l{3pt}r{3pt}){3-3} \cmidrule(l{3pt}r{3pt}){4-4} \cmidrule(l{3pt}r{3pt}){5-5}
+  & w/o country FEs & with country FEs & w/o country FEs  & with country FEs \\
+\midrule
+Brexit & \num{1.04926} & \num{1.09783} & \num{1.04818} & \num{1.04227}\\
+ & (\num{0.08317}) & (\num{0.08709}) & (\num{0.08753}) & (\num{0.08722})\\
+Ownership ratio & \num{1.22895}*** & \num{1.19491}*** & \num{0.82730}** & \num{0.81918}**\\
+ & (\num{0.02649}) & (\num{0.02510}) & (\num{0.05141}) & (\num{0.05105})\\
+Affiliate size & \num{0.99995}*** & \num{0.99995}*** & \num{0.99995} & \num{0.99995}\\
+ & (\num{0.00001}) & (\num{0.00001}) & (\num{0.00004}) & (\num{0.00004})\\
+GBR & \num{0.93495}* &  & \num{0.94771} & \\
+ & (\num{0.02717}) &  & (\num{0.03208}) & \\
+log GDP, PPP & \num{1.02577}*** &  & \num{0.93731}*** & \\
+ & (\num{0.00378}) &  & (\num{0.01553}) & \\
+log GDP per capita, PPP & \num{0.89271}*** &  & \num{0.63200}*** & \\
+ & (\num{0.00627}) &  & (\num{0.04720}) & \\
+log Distance from Japan & \num{0.89644}*** &  & \num{0.35347}*** & \\
+ & (\num{0.00770}) &  & (\num{0.10658}) & \\
+\midrule
+Fixed Effect: Year & YES & YES & YES & YES\\
+Fixed Effect: Sector & YES & YES & YES & YES\\
+Fixed Effect: Country & NO & YES & NO & YES\\
+Num.Obs. & \num{43597} & \num{45826} & \num{6174} & \num{6174}\\
+\bottomrule
+\multicolumn{5}{l}{\rule{0pt}{1em}* p $<$ 0.05, ** p $<$ 0.01, *** p $<$ 0.001}\\
+\end{tabular}
+\begin{tablenotes}
+\item \textit{Note: } 
+\item Hazard ratios are reported. The Cox proportional hazards model estimates them. Failure event is exit. Variables with hazard ratios greater than 1 are associated with a higher likelihood of exit and shorter survival time. Variables with a hazard ratio smaller than 1 are associated with a lower likelihood of exit and longer survival time. Host countries' fixed effects and year-fixed effects are included in the estimation. Standard errors are presented in blankets.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}

@@ -1,0 +1,29 @@
+#' @rdname get_predict
+#' @export
+get_predict.mhurdle <- function(
+    model,
+    newdata = get_modeldata(model),
+    type = "response",
+    ...) {
+    out <- stats::predict(model, what = type, newdata = newdata)
+    out <- data.table(estimate = out)
+    out <- add_rowid(out, newdata)
+    return(out)
+}
+
+
+#' @rdname get_vcov
+#' @export
+get_vcov.mhurdle <- function(model, vcov = NULL, ...) {
+    if (!is.null(vcov) && !is.logical(vcov)) {
+        stop_sprintf(
+            "The `vcov` for this class of models must be TRUE or FALSE."
+        )
+    }
+    vcov <- sanitize_vcov(model, vcov)
+    out <- try(stats::vcov(model), silent = TRUE)
+    if (inherits(out, "try-error")) {
+        out <- tryCatch(model[["vcov"]], error = function(e) NULL)
+    }
+    return(out)
+}

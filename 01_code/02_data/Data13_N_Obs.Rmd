@@ -1,0 +1,78 @@
+---
+title: "現地法人数・親会社数データの作成"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = FALSE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+# 概要
+
+株主データから産業×国×年ごとの現地法人数・親会社数を集計する。
+
+- **現地法人数**: rank==1 で現地法人を代表したうえで集計する。
+- **親会社数**: 全 rank を使用し、当該国に現地法人を持つ親会社数を集計する。
+
+# パッケージの読み込み
+
+```{r packages}
+library(dplyr)
+library(rio)
+```
+
+# データの読み込み
+
+## 入力データ
+
+- `../../03_data_output/ShareHolder/shareholder_panel_iso_sector.dta`
+
+## 出力データ
+
+- `../../03_data_output/EntryExit/N_affiliate_country_industry_year.dta`
+- `../../03_data_output/EntryExit/N_parent_country_industry_year.dta`
+
+```{r load-data}
+shjp <- rio::import("../../03_data_output/ShareHolder/shareholder_panel_iso_sector.dta")
+```
+
+# 現地法人数の集計
+
+```{r affiliate-count}
+affiliate_count <- shjp %>%
+  group_by(AffiliateCode, year) %>%
+  filter(rank == min(rank)) %>%
+  slice(1) %>%
+  ungroup() %>%
+  filter(!is.na(FA_SectorCode2009), FA_SectorCode2009 != 0,
+         !is.na(iso), iso != "") %>%
+  group_by(iso, FASector = FA_SectorCode2009, year) %>%
+  summarise(N_total_industry = n_distinct(AffiliateCode), .groups = "drop") %>%
+  arrange(iso, FASector, year)
+
+rio::export(affiliate_count,
+            "../../03_data_output/EntryExit/N_affiliate_country_industry_year.dta")
+```
+
+# 親会社数の集計
+
+```{r parent-count}
+parent_count <- shjp %>%
+  filter(!is.na(Parent_SectorCode2009), Parent_SectorCode2009 != 0,
+         !is.na(iso), iso != "") %>%
+  group_by(iso, Parent_SectorCode = Parent_SectorCode2009, year) %>%
+  summarise(N_total_industry = n_distinct(JPCode), .groups = "drop") %>%
+  arrange(iso, Parent_SectorCode, year)
+
+rio::export(parent_count,
+            "../../03_data_output/EntryExit/N_parent_country_industry_year.dta")
+```

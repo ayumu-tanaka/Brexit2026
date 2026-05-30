@@ -1,0 +1,35 @@
+\begin{table}[!ht]
+\centering
+\caption{\label{tab:noneu}Effect of the Brexit Referendum on Exit Probability}
+\centering
+\begin{threeparttable}
+\begin{tabular}[t]{lcccc}
+\toprule
+\multicolumn{1}{c}{ } & \multicolumn{2}{c}{Non-EU HI} & \multicolumn{2}{c}{EU HI + Non-EU HI} \\
+\cmidrule(l{3pt}r{3pt}){2-3} \cmidrule(l{3pt}r{3pt}){4-5}
+ & (1) TWFE OLS & (2) Pooled Logit QMLE DiD & (3) TWFE OLS & (4) Pooled Logit QMLE DiD\\
+\midrule
+UK $\times$ 2010 & -0.049* &  & -0.026 & \\
+ & (0.015) &  & (0.017) & \\
+UK $\times$ 2012 & -0.020 &  & -0.011 & \\
+ & (0.010) &  & (0.009) & \\
+UK $\times$ 2016 & 0.016 & 0.001 & 0.013 & 0.006\\
+ & (0.006) & (0.008) & (0.008) & (0.008)\\
+UK $\times$ 2018 & 0.011 & -0.013 & 0.008 & -0.003\\
+ & (0.016) & (0.014) & (0.012) & (0.010)\\
+UK $\times$ 2020 & 0.031 & 0.003 & 0.031* & 0.018\\
+ & (0.018) & (0.015) & (0.014) & (0.012)\\
+Observations & 10,170 & 10,170 & 17,358 & 17,358\\
+R-squared & 0.655 &  & 0.661 & \\
+Pseudo R-squared &  & 0.131 &  & 0.129\\
+Affiliate FE & Yes & No & Yes & No\\
+Group FE & No & Yes & No & Yes\\
+Two-year Period FE & Yes & Yes & Yes & Yes\\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item \textit{Notes: } 
+\item Columns (1)--(2): comparison group = CAN, AUS, CHE, KOR, NZL. Columns (3)--(4): comparison group = EU high-income (AUT, BEL, DEU, DNK, FIN, FRA, IRL, ITA, LUX, NLD, SWE) plus CAN, AUS, CHE, KOR, NZL. Odd columns: OLS estimates from the TWFE event study model with affiliate and two-year period fixed effects (reference period: 2014--2015). Even columns: average marginal effects from the pooled logit QMLE DiD specification following \citet{wooldridge2023simple}. Standard errors clustered at the country level in parentheses. * $p<0.05$, ** $p<0.01$, *** $p<0.001$.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}

@@ -1,0 +1,133 @@
+---
+title: "欧州における日本企業現地法人数の地図"
+author: "Ayumu Tanaka"
+date: "2024-06-22"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,      # コードを表示する
+  cache = FALSE,    # キャッシュは使わない
+  message = FALSE,  # パッケージ読込時などのメッセージを表示しない
+  warning = FALSE,  # 警告メッセージを表示しない
+  dpi = 600         # 画質向上: HTML プレビュー用 DPI を 600 に設定する
+)
+```
+
+# 地図データの準備
+
+```{r packages}
+library(ggplot2)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(rio)
+library(gridExtra)
+```
+
+```{r world-map}
+# Natural Earth の国境ポリゴンを取得する。
+# scale = "large" で高解像度の国境ポリゴンを使う（"medium" より精細）。
+world <- ne_countries(scale = "large", returnclass = "sf")
+
+# ポルトガルのコードをデータ側に合わせる。
+world$su_a3[world$name == "Portugal"] <- "PRT"
+
+# 使う列だけ残しておく。
+world2 <- world[, c("su_a3", "name", "name_ja", "continent", "label_x", "label_y", "geometry")]
+
+theme_set(theme_bw())
+```
+
+# 国別現地法人数データの読み込み
+
+```{r affiliate-data}
+# 国年レベルに集計した現地法人数データを読み込む。
+N_Aff <- rio::import("../../03_data_output/Affiliate/affiliate_count_country_year.dta")
+
+# 地図ではスイスも欧州として扱う。
+N_Aff$EU[N_Aff$country == "CHE"] <- 1
+
+# 欧州サンプルに限定する。
+N_Aff_Europe <- subset(N_Aff, EU == 1)
+
+# 論文で使う 2010 年と 2020 年のデータだけを残す。
+N_Aff_Europe_2010 <- subset(N_Aff_Europe, year == 2010)
+N_Aff_Europe_2020 <- subset(N_Aff_Europe, year == 2020)
+
+# 地図データと結合する。
+world_merged2010 <- merge(world2, N_Aff_Europe_2010, by.x = "su_a3", by.y = "country")
+world_merged2020 <- merge(world2, N_Aff_Europe_2020, by.x = "su_a3", by.y = "country")
+```
+
+# 図C1の作成
+
+```{r fig-map-aff-2010, fig.width=7, fig.height=5}
+# 2010年の地図。
+# plot.margin を最小化して2枚の地図の間隔を詰める。
+ggp2010 <- ggplot(data = world_merged2010) +
+  geom_sf(aes(fill = N), alpha = 0.4) +
+  scale_fill_distiller(name = "N", palette = "Greens", direction = 1, guide = NULL) +
+  labs(title = "Number of affiliates in 2010", caption = "") +
+  coord_sf(xlim = c(-11, 32), ylim = c(70, 35), expand = TRUE) +
+  theme(
+    axis.text    = element_blank(),
+    axis.title   = element_blank(),
+    plot.margin  = margin(2, 2, 2, 2, "pt")  # 余白を最小化して地図間の隙間を詰める
+  ) +
+  geom_sf_text(
+    aes(label = N),
+    size = 3,
+    color = "black",
+    fontface = "bold",
+    position = "dodge"
+  )
+
+ggp2010
+```
+
+```{r fig-map-aff-2020, fig.width=7, fig.height=5}
+# 2020年の地図。
+ggp2020 <- ggplot(data = world_merged2020) +
+  geom_sf(aes(fill = N), alpha = 0.4) +
+  scale_fill_distiller(name = "N", palette = "Greens", direction = 1, guide = NULL) +
+  labs(title = "Number of affiliates in 2020", caption = "") +
+  coord_sf(xlim = c(-11, 32), ylim = c(70, 35), expand = TRUE) +
+  theme(
+    axis.text    = element_blank(),
+    axis.title   = element_blank(),
+    plot.margin  = margin(2, 2, 2, 2, "pt")  # 余白を最小化して地図間の隙間を詰める
+  ) +
+  geom_sf_text(
+    aes(label = N),
+    size = 3,
+    color = "black",
+    fontface = "bold",
+    position = "dodge"
+  )
+
+ggp2020
+```
+
+```{r save-figure-c1}
+# 論文で使う 2010 年と 2020 年の比較図を保存する。
+# grid.arrange の padding を 0 にして地図間の余白を最小化する。
+# device = pdf (標準) を使用: cairo_pdf は PDF 1.7 を生成し
+# pdflatex が許容する PDF 1.5 を超えるためコンパイル警告が出る。
+combined <- grid.arrange(ggp2010, ggp2020, nrow = 1, padding = unit(0, "pt"))
+
+ggsave(
+  "../../04_tex/main/FigC1.pdf",
+  plot        = combined,
+  width       = 10,   # LaTeX の \textwidth に収まるよう 14 → 10 インチに戻す
+  height      = 5,
+  dpi         = 600,  # 画質向上: 300 → 600 dpi
+  device      = pdf,  # PDF 1.4 互換: pdflatex との互換性を確保する
+  useDingbats = FALSE # ベクターフォントを正しく埋め込む
+)
+```

@@ -1,0 +1,223 @@
+---
+title: "子会社データと親会社データの接続"
+author: "Ayumu Tanaka"
+date: "2024-05-18"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # Display codes
+                      cache = FALSE, # do not Cache the results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+# 準備
+
+
+```{r preparation}
+# ワークスペースの初期化
+rm(list = ls())
+
+# 必要なパッケージの読み込み
+library("rio")           # For importing data 
+library("tidyverse")     # For data manipulation
+library("countrycode")   # For creating the country ISO codes
+library("Hmisc")         # For labeling the variables
+```
+
+
+
+
+# データの読み込み
+
+
+以下のデータを読み込む。
+
+- "FA3": 日本の海外子会社の基本データ
+
+```{r load-data}
+
+FA3  <- rio::import("../../03_data_output/Affiliate/affiliate_panel_with_country_covariates.dta")
+JP2   <- rio::import("../../03_data_output/Parent/parent_panel_with_sector_codes.dta")
+SHJP <- rio::import("../../03_data_output/ShareHolder/shareholder_panel_raw.dta")
+
+```
+
+
+# 最大出資親会社の特定
+
+```{r ranking-largest-owner}
+# ランクを確認
+barplot(table(SHJP$rank), 
+        main = "Number of Affiliates by Rank of Parent Firm",
+        xlab = "Rank of Parent Firm",
+        ylab = "Number of Affiliates",
+        col = "lightblue"
+        )
+```
+
+
+第1位の親会社に絞る。
+
+```{r filter-largest-owner-SHJP}
+
+# `JPCode` 年ごとに最大の `JOwnRatio` だけ残す
+  SHJP2 <- SHJP %>%
+    filter(rank == 1) 
+
+```
+
+# 重複を確認
+
+```{r}
+# `JPCode` と `year` の重複を確認
+  duplicates <- SHJP2 %>%
+    group_by(AffiliateCode, year) %>%
+    filter(n() > 1) %>%
+    ungroup
+```
+
+
+
+```{r check-duplicates}
+# `AffiliateCode` 年ごとの件数を作成
+  SHJP2 <- SHJP2 %>%
+    group_by(AffiliateCode, year) %>%
+    mutate(count = n()) %>%
+    ungroup()
+```
+
+```{r}
+barplot(table(SHJP2$count), 
+        main = "Number of Affiliates by Count of Parent Firm",
+        xlab = "Count of Parent Firm",
+        ylab = "Number of Affiliates",
+        col = "lightblue"
+        )
+```
+
+
+
+# 重複を削除
+```{r}
+SHJP3 <- SHJP2 %>%
+  filter(count == 1) %>%
+  select(-count) # Remove the count variable
+
+# `AffiliateCode` と `year` の重複を削除
+SHJP3 <- SHJP3 %>%
+  group_by(AffiliateCode, year) %>%
+  filter(n() == 1) %>%
+  ungroup()
+```
+
+
+# 出資データと親会社財務データの接続
+
+Combine the Japanese ownership data "SHJP" with the Japanese parent firms' financial data "JP"
+
+```{r combine-JP-data}
+
+SHJP4 <- left_join(SHJP3, JP2,
+                           by = c("JPCode" = "JPCode", 
+                                  "year" = "year"))
+
+
+# Remove duplicates in terms of AffilateCode and year
+SHJP4 <- SHJP4 %>%
+  group_by(AffiliateCode, year) %>%
+  filter(n() == 1) %>%
+  ungroup()
+  
+```
+
+## データの整形
+
+必要ない可能性ある。
+
+```{r clean-data}
+# 列名中の `\"\"` を削除
+  names(SHJP4) <- gsub("", "", names(SHJP4))
+
+```
+
+
+
+
+# 出資データと現地法人基礎データの接続
+
+Combine the Japanese ownership data "SHJP_JP" with the Japanese affiliates' basic data "FA"
+
+
+```{r combine-FA-data}
+# Merge Japanese parent firms' ownership data (SHJP) and Japanese affiliates' basic data (FA) 
+  SHJP5 <- left_join(SHJP4, FA3, 
+                         by = c("AffiliateCode" = "AffiliateCode", 
+                                "year" = "year"))
+# `AffiliateCode` と `year` の重複を削除
+  SHJP5 <- SHJP5 %>%
+    group_by(AffiliateCode, year) %>%
+    filter(n() == 1) %>%
+    ungroup()
+```
+
+
+
+```{r}
+# `KSKJPCode`・`iso`・`year` で並べ替え
+  SHJP5 = SHJP5[order(SHJP5$JPCode, 
+                      SHJP5$iso, 
+                      SHJP5$year), ]
+```
+
+
+# 現地法人基礎データへの出資情報付与
+
+```{r combine-FA-data2}
+# Combine the Japanese affiliates' basic data (FA) with the ownership data (SHJP_JP)
+FA4 <- left_join(FA3, SHJP4, 
+                          by = c("AffiliateCode" = "AffiliateCode", 
+                                 "year" = "year"))
+
+# `AffiliateCode` と `year` の重複を削除
+FA4 <- FA4 %>%
+  group_by(AffiliateCode, year) %>%
+  filter(n() == 1) %>%
+  ungroup()
+```
+
+
+```{r}
+# order AffiliateCode year JPCode
+  FA4 = FA4[order(FA4$AffiliateCode, 
+                  FA4$year, 
+                  FA4$JPCode), ]
+
+# Move AffiliateCode year JPCode
+  FA4 <- FA4 %>%
+    select(AffiliateCode, year, JPCode, everything())
+
+```
+
+
+
+
+# データの保存
+
+
+```{r save-data}
+# RDS形式で保存
+  rio::export(FA4, "../../03_data_output/Affiliate/affiliate_panel_with_parent_links.dta")
+
+```
+
+
+```{r check-saved-data}
+#  rio::import("../../03_data_output/Affiliate/affiliate_panel_with_parent_links.dta")
+```

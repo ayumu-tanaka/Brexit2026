@@ -1,0 +1,296 @@
+---
+title: "東洋経済データの産業分類コード整理"
+author: "Ayumu Tanaka"
+date: "2024-05-18"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # Display codes
+                      cache = FALSE, # do not Cache the results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+# 準備
+
+
+```{r preparation}
+# ワークスペースの初期化
+rm(list = ls())
+
+# 必要なパッケージの読み込み
+library("rio")           # For importing data 
+library("tidyverse")     # For data manipulation
+library("countrycode")   # For creating the country ISO codes
+library("Hmisc")         # For labeling the variables
+```
+
+
+
+
+# データの読み込み
+
+- "../../03_data_output/Affiliate/affiliate_panel_raw.dta"
+- "../../03_data_output/Parent/parent_panel_raw.dta"
+
+以下のデータを読み込む。
+
+- "JP": 日本の親会社の財務データ
+- "FA": 日本の海外子会社の基本データ
+
+```{r load-data}
+
+JP <- import("../../03_data_output/Parent/parent_panel_raw.dta")
+FA <- import("../../03_data_output/Affiliate/affiliate_panel_raw.dta")
+```
+
+
+# 産業分類コードの整備
+
+```{r sector-codes}
+
+# 1990年・2000年・2009年の産業コード対応表を読み込む
+SectorCode_Map <- import("../../02_data_input/KSK_Code_tanaka2024.xlsx",
+          sheet = "SectorCode_Map", skip = 3)
+# `SectorCode` を数値型に変換
+SectorCode_Map$SectorCode1990 = as.numeric(SectorCode_Map$SectorCode1990)
+SectorCode_Map$SectorCode2000 = as.numeric(SectorCode_Map$SectorCode2000)
+SectorCode_Map$SectorCode2009 = as.numeric(SectorCode_Map$SectorCode2009)
+
+# 2009年の産業コード表を読み込む
+SectorCode2009 <- import("../../02_data_input/KSK_Code_tanaka2024.xlsx",
+            sheet = "SectorCode2009", skip = 3)
+SectorCode2009 = SectorCode2009 %>%
+  select(c(SectorCode2009, SectorName2009, SectorNameAlph,
+           SectorClass, SectorClassName, SectorClassNameAlph))
+
+# `SectorCode` を数値型に変換
+SectorCode_Map$SectorCode2009 = as.numeric(SectorCode_Map$SectorCode2009)
+
+```
+
+
+# 親会社レベルの処理
+
+Combining the sector codes with JP data
+
+## ステップ1: 1990年コードの接続
+
+```{r combine-sector-codes-JP}
+
+## `SectorCode1990` を鍵に `JP` と対応表を結合
+  JP <- left_join(JP, SectorCode_Map %>% 
+                    select(c(SectorCode1990, SectorCode2009)), 
+                  by = c("Parent_SectorCode1990" = "SectorCode1990"))
+
+```
+
+
+```{r}
+## `Parent_SectorCode1990` がある場合は `SectorCode2009` を採用
+  JP <- JP %>%
+    mutate(Parent_SectorCode2009 = 
+             ifelse(!is.na(Parent_SectorCode1990), SectorCode2009, Parent_SectorCode2009))
+
+
+## 一時的に `SectorCode2009` を削除
+  JP$SectorCode2009 = NULL
+
+```
+
+
+## ステップ2: 2000年コードの接続
+
+```{r}
+
+## `SectorCode2000` を鍵に `JP` と対応表を結合
+  JP <- left_join(JP, SectorCode_Map %>% 
+                    select(c(SectorCode2000, SectorCode2009)), 
+                  by = c("Parent_SectorCode2000" = "SectorCode2000"))
+
+## `SectorCode2000` がある場合は `SectorCode2009` を採用
+  JP <- JP %>%
+    mutate(Parent_SectorCode2009 = 
+             ifelse(!is.na(Parent_SectorCode2000), SectorCode2009, Parent_SectorCode2009))  
+   
+## `SectorCode2009` を削除
+  JP$SectorCode2009 = NULL
+  
+```
+
+
+## ステップ3: 例外処理
+
+
+```{r}
+
+## 3000 と 8000 のコードを補正
+## Replacing SectorCode2009 = 3000 if SectorCode1990 == 3000
+  JP$Parent_SectorCode2009[JP$Parent_SectorCode1990 == 3000&is.na(JP$Parent_SectorCode2009)] = 5210 # Other wholesaling
+## Replacing SectorCode2009 = 3000 if SectorCode1990 == 3000
+  JP$Parent_SectorCode2009[JP$Parent_SectorCode1990 == 8000&is.na(JP$Parent_SectorCode2009)] = 7910 #Other Services
+
+
+## `SectorCode1990` と `SectorCode2000` を削除
+  JP$Parent_SectorCode1990 = NULL
+  JP$Parent_SectorCode2000 = NULL
+```
+
+## ステップ4: 前後年コードで補完
+
+```{r}
+
+
+## ラグ・リードの産業コードを作成
+  JP <- JP %>%
+    group_by(JPCode) %>%
+    mutate(Parent_SectorCode2009L1 = lag(Parent_SectorCode2009, n=1))
+  
+  JP <- JP %>%
+    group_by(JPCode) %>%
+    mutate(Parent_SectorCode2009F1 = lead(Parent_SectorCode2009, n=1))
+
+## 欠損した `SectorCode2009` をラグで補完
+  JP$Parent_SectorCode2009[is.na(JP$Parent_SectorCode2009)] <- JP$Parent_SectorCode2009L1[is.na(JP$Parent_SectorCode2009)]
+
+## 残る欠損をリードで補完
+  JP$Parent_SectorCode2009[is.na(JP$Parent_SectorCode2009)] <- JP$Parent_SectorCode2009F1[is.na(JP$Parent_SectorCode2009)]
+  
+
+## ラグ・リード変数を削除
+  JP$Parent_SectorCode2009L1 <- NULL
+  JP$Parent_SectorCode2009F1 <- NULL
+
+```
+
+## ステップ5: 2009年コード表との接続
+
+```{r}
+
+## `JP` と `SectorCode2009` を結合
+  SectorCode2009$SectorCode2009 <- as.numeric(SectorCode2009$SectorCode2009)
+  JP <- left_join(JP, SectorCode2009, 
+                  by = c("Parent_SectorCode2009" = "SectorCode2009"))
+  
+```
+
+
+## ステップ6
+
+```{r}
+## 変数名を整える
+  names(JP)[names(JP) == "SectorClass"] <-         "Parent_SectorClass"
+  names(JP)[names(JP) == "SectorClassName"] <-     "Parent_SectorClassName"
+  names(JP)[names(JP) == "SectorClassNameAlph"] <- "Parent_SectorClassNameAlph"
+  names(JP)[names(JP) == "SectorName2009"] <-      "Parent_SectorName2009"
+  names(JP)[names(JP) == "SectorNameAlph"] <-      "Parent_SectorNameAlph"
+  
+```
+
+
+# 子会社レベルの処理
+
+Combining the sector codes with FA data
+
+
+## ステップ1
+
+```{r combine-sector-codes-FA}
+
+## `SectorCode1990` を鍵に `FA` と対応表を結合
+  FA <- left_join(FA, SectorCode_Map %>% 
+                    select(c(SectorCode1990, SectorCode2009)), 
+                  by = c("FA_SectorCode1990" = "SectorCode1990"))
+
+  FA <- FA %>%
+    mutate(FA_SectorCode2009 = 
+             ifelse(!is.na(FA_SectorCode1990), SectorCode2009, FA_SectorCode2009))
+
+## `SectorCode2009` を削除
+  FA$SectorCode2009 = NULL
+```
+
+
+
+## ステップ2
+```{r}
+## `SectorCode2000` を鍵に `FA` と対応表を結合
+  FA <- left_join(FA, SectorCode_Map %>% 
+                    select(c(SectorCode2000, SectorCode2009)), 
+                  by = c("FA_SectorCode2000" = "SectorCode2000"))
+
+  FA <- FA %>%
+    mutate(FA_SectorCode2009 = 
+             ifelse(!is.na(FA_SectorCode2000), SectorCode2009, FA_SectorCode2009))
+  
+## `SectorCode2009` を削除
+  FA$SectorCode2009 = NULL
+```
+  
+  
+## ステップ3
+```{r}
+## `KSFSectorCode1900` と `KSFSectorCode2000` を削除
+  FA$FA_SectorCode1990 = NULL
+  FA$FA_SectorCode2000 = NULL
+```
+
+  
+## ステップ4
+```{r}
+## 産業大分類を整える
+  ## SectorClass: SectorClass
+  FA <- left_join(FA, SectorCode2009, 
+                  by = c("FA_SectorCode2009" = "SectorCode2009"))
+```
+
+
+## ステップ5
+
+```{r}
+## 変数名を整える
+  names(FA)[names(FA) == "SectorClass"] <-         "FA_SectorClass"
+  names(FA)[names(FA) == "SectorClassName"] <-     "FA_SectorClassName"
+  names(FA)[names(FA) == "SectorClassNameAlph"] <- "FA_SectorClassNameAlph"
+  names(FA)[names(FA) == "SectorName2009"] <-      "FA_SectorName2009"
+  names(FA)[names(FA) == "SectorNameAlph"] <-      "FA_SectorNameAlph"
+  
+```
+
+
+# 重複の削除
+
+```{r remove-duplicates}
+# `JPCode` と `year` の重複を削除
+JP <- JP %>%
+  group_by(JPCode, year) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
+
+# `AffiliateCode` と `year` の重複を削除
+FA <- FA %>%
+  group_by(AffiliateCode, year) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
+
+```
+
+
+# データの保存
+
+```{r export-data}
+  rio::export(JP, "../../03_data_output/Parent/parent_panel_with_sector_codes.dta")
+  rio::export(FA, "../../03_data_output/Affiliate/affiliate_panel_with_sector_codes.dta")
+```
+
+```{r load-data2}
+
+JP2 <- rio::import("../../03_data_output/Parent/parent_panel_with_sector_codes.dta")
+
+```

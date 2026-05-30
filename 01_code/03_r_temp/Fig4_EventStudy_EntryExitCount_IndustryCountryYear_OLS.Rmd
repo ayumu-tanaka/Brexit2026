@@ -1,0 +1,170 @@
+---
+title: "OLS-TWFE Event Study: Entry and Exit Counts (Industry × Country × Year)"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  cache = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+# Purpose
+
+This file produces simple **OLS-TWFE** event-study plots for **entry** and **exit** *counts* at the **industry × country × year** level, using:
+
+- `03_data_output/EntryExit/N_affiliate_entry_exit.dta` (created in `Data14_Entry_Exit_Data.Rmd`)
+
+The treated unit is the UK (`iso == "GBR"`). The reference (omitted) year is 2014, following the style used in `01_code/03_r/Tab2_Fig4.Rmd`.
+
+# Packages
+
+```{r load-packages}
+library(tidyverse)
+library(rio)
+library(fixest)
+```
+
+# Load data
+
+```{r load-data}
+df <- rio::import("../../03_data_output/EntryExit/N_affiliate_entry_exit.dta")
+
+df <- df %>%
+  mutate(
+    year = as.integer(year),
+    FASector = as.integer(FASector),
+    treated = (iso == "GBR"),
+    unit = interaction(iso, FASector, drop = TRUE)
+  ) %>%
+  filter(year >= 2010, year <= 2020)
+
+summary(df)
+```
+
+# Comparison groups
+
+```{r comparison-groups}
+eu_hi_iso <- c("AUT", "BEL", "DNK", "FIN", "FRA", "DEU", "IRL", "ITA", "LUX", "NLD", "SWE", "GBR")
+noneu_hi_iso <- c("CAN", "AUS", "CHE", "KOR", "NZL")
+
+df <- df %>%
+  mutate(
+    sample_HI = iso %in% eu_hi_iso,
+    sample_ALL = iso %in% c(eu_hi_iso, noneu_hi_iso)
+  )
+
+table(df$sample_HI, useNA = "ifany")
+table(df$sample_ALL, useNA = "ifany")
+```
+
+# OLS-TWFE event studies
+
+## Entry counts
+
+```{r es-entry-ols}
+es_entry_ols_hi <- fixest::feols(
+  N_entry_industry ~ i(year, treated, ref = 2014) | year + unit,
+  data = df %>% filter(sample_HI),
+  vcov = ~ iso
+)
+es_entry_ols_all <- fixest::feols(
+  N_entry_industry ~ i(year, treated, ref = 2014) | year + unit,
+  data = df %>% filter(sample_ALL),
+  vcov = ~ iso
+)
+
+fixest::etable(es_entry_ols_hi, es_entry_ols_all)
+```
+
+## Exit counts
+
+```{r es-exit-ols}
+es_exit_ols_hi <- fixest::feols(
+  N_exit_industry ~ i(year, treated, ref = 2014) | year + unit,
+  data = df %>% filter(sample_HI),
+  vcov = ~ iso
+)
+es_exit_ols_all <- fixest::feols(
+  N_exit_industry ~ i(year, treated, ref = 2014) | year + unit,
+  data = df %>% filter(sample_ALL),
+  vcov = ~ iso
+)
+
+fixest::etable(es_exit_ols_hi, es_exit_ols_all)
+```
+
+# Event-study plots (two comparison groups)
+
+```{r plot-es-ols, dpi = 300}
+op <- par(no.readonly = TRUE)
+par(mfrow = c(1, 2))
+
+fixest::iplot(
+  list(Entry = es_entry_ols_hi, Exit = es_exit_ols_hi),
+  pt.join = TRUE,
+  main = "Brexit referendum: Entry vs Exit (count)",
+  sub = "OLS-TWFE ES. Comparison: EU high-income. Ref. year = 2014. 1994–2022.",
+  xlab = "Year"
+)
+legend("topleft", col = 1:2, pch = 10, cex = 0.8, lwd = 1, lty = 1:2,
+       legend = c("Entry", "Exit"),
+       title = "Outcome")
+
+fixest::iplot(
+  list(Entry = es_entry_ols_all, Exit = es_exit_ols_all),
+  pt.join = TRUE,
+  main = "Brexit referendum: Entry vs Exit (count)",
+  sub = "OLS-TWFE ES. Comparison: all high-income. Ref. year = 2014. 1994–2022.",
+  xlab = "Year"
+)
+legend("topleft", col = 1:2, pch = 10, cex = 0.8, lwd = 1, lty = 1:2,
+       legend = c("Entry", "Exit"),
+       title = "Outcome")
+
+par(op)
+```
+
+## Optional: save as EPS (not required)
+
+```{r save-eps, eval=FALSE}
+postscript("../../04_tex/main/Fig4_entry_exit_count_ols.eps", horizontal = FALSE,
+           width = 12, height = 6)
+
+op <- par(no.readonly = TRUE)
+par(mfrow = c(1, 2))
+
+fixest::iplot(
+  list(Entry = es_entry_ols_hi, Exit = es_exit_ols_hi),
+  pt.join = TRUE,
+  main = "Brexit referendum: Entry vs Exit (count)",
+  sub = "OLS-TWFE ES. Comparison: EU high-income. Ref. year = 2014. 1994–2022.",
+  xlab = "Year"
+)
+legend("topleft", col = 1:2, pch = 10, cex = 0.8, lwd = 1, lty = 1:2,
+       legend = c("Entry", "Exit"),
+       title = "Outcome")
+
+fixest::iplot(
+  list(Entry = es_entry_ols_all, Exit = es_exit_ols_all),
+  pt.join = TRUE,
+  main = "Brexit referendum: Entry vs Exit (count)",
+  sub = "OLS-TWFE ES. Comparison: all high-income. Ref. year = 2014. 1994–2022.",
+  xlab = "Year"
+)
+legend("topleft", col = 1:2, pch = 10, cex = 0.8, lwd = 1, lty = 1:2,
+       legend = c("Entry", "Exit"),
+       title = "Outcome")
+
+par(op)
+dev.off()
+```

@@ -1,0 +1,238 @@
+---
+title: "SDiDによる新規参入効果の推定図"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+
+```{r packages}
+# devtools::install_github("synth-inference/synthdid")
+library(synthdid)
+library(ggplot2)
+library(dplyr)
+
+set.seed(12345)
+```
+
+# データの読み込み
+
+
+```{r data}
+library(rio)
+Data <- rio::import("../../03_data_output/Affiliate/N_affiliate_entry_country_industry_year.dta")
+
+Data$FA_Sector <- Data$FA_SectorCode2009
+Data$FA_SectorCode2009 <- NULL
+
+# 2010年から2020年に限定
+DataA <- Data[Data$year >= 2010 & Data$year <= 2020, ]
+
+
+# EU加盟国だけ残す
+DataA <- DataA[DataA$EU == 1, ]
+
+# 高所得EUだけ残す
+EU_HI <- c("AUT", "BEL", "DNK", "FIN", "FRA", "DEU", "IRL", "ITA", "LUX", "NLD", "SWE", "GBR")
+DataA <- DataA[DataA$iso %in% EU_HI, ]
+
+# `iso` と `FA_sector` の組み合わせIDを作成
+#DataA <- DataA %>%
+#  mutate(pair = group_indices(., iso, FA_Sector))
+
+```
+
+
+# バランスドパネルを作成
+
+```{r make-balanced-panel}
+
+library(plm)
+library(dplyr)
+library(tidyr)
+
+DataB <- DataA %>%
+  # All combinations of iso - FA_Sector - year
+  complete(iso, FA_Sector, year)
+
+# `iso` と `FA_Sector` の組み合わせID
+DataB <- DataB %>%
+  group_by(iso, FA_Sector) %>%
+  mutate(pair = cur_group_id()) %>%
+  ungroup()
+
+# `iso` が空の行を削除
+DataB <- DataB %>%
+  filter(iso != "")
+# `FA_Sector == 0` を削除
+DataB <- DataB %>%
+  filter(FA_Sector != 0)
+
+# バランスドパネルを作成
+#DataB <- plm::make.pbalanced(DataA, balance.type = c("fill"), index = c("iso", "year"))
+
+# `N` の欠損を 0 に置換
+DataB$N[is.na(DataB$N)] <- 0
+
+```
+
+
+
+```{r prepare}
+
+# treated = 1 if iso == "GBR" and year >= 2016
+# treated = 0 if iso != "GBR" and year < 2016
+DataB$treated <- ifelse(DataB$iso == "GBR" & DataB$year >= 2016, 1, 0)
+
+DataB <- DataB[, c("iso", "year", 
+                              "N", "pair", "treated")]
+
+table(DataB$year, DataB$treated)
+
+# `iso` を落とす前に組み合わせ表を保存
+pair_iso_map <- unique(DataB[, c("pair", "iso")])
+
+# データフレームに変換
+DataB <- as.data.frame(DataB)
+
+# `country`・`year`・`outcome`・`treated` の順に並べる
+DataB <- DataB[, c("pair", "year", "N", "treated")]
+
+```
+
+
+
+# Synthetic DiDの推定
+
+
+```{r sdid, message=FALSE,  warning=FALSE}
+
+# Synthetic DiD 用のデータを準備
+# `panel.matrices` で wide 形式に変換
+setup = synthdid::panel.matrices(DataB, 
+                                 unit =1, 
+                                 time = 2, 
+                                 outcome = 3, 
+                                 treatment =4)
+# `synthdid_estimate` で SDiD を推定
+## Y: matrix of observed values
+## N0: number of control group
+## T0: number of pretreatment periods
+estimateSDiD = synthdid::synthdid_estimate(setup$Y, setup$N0, setup$T0)
+estimateSDiD
+print(summary(estimateSDiD))
+
+# 分散共分散行列を計算
+# Bootstrap 法で標準誤差を計算（set.seed は直前に置く）
+set.seed(12345)
+seSDiDb = sqrt(vcov(estimateSDiD, method = 'bootstrap'))
+# Placebo
+seSDiDp = sqrt(vcov(estimateSDiD, method = 'placebo'))
+# Jackknife
+seSDiDj = sqrt(vcov(estimateSDiD, method = 'jackknife'))
+
+# 観測数 (Unit数)
+N_units <- nrow(setup$Y)
+
+```
+
+
+- `sprintf` is a wrapper for the C function sprintf, that returns a character vector containing a formatted combination of text and variable values.
+
+```{r label}
+# sprintf
+label_point <- sprintf('Point estimate = %1.3f', estimateSDiD)
+
+label_boot <- sprintf('Bootstrap S.E. = %1.3f, 95%% CI [%1.3f, %1.3f]', 
+                       seSDiDb, 
+                       estimateSDiD - 1.96 * seSDiDb, 
+                       estimateSDiD + 1.96 * seSDiDb)
+
+label_jack <- sprintf('Jackknife S.E. = %1.3f, 95%% CI [%1.3f, %1.3f]', 
+                       seSDiDj, 
+                       estimateSDiD - 1.96 * seSDiDj, 
+                       estimateSDiD + 1.96 * seSDiDj)
+
+label_placebo <- sprintf('Placebo S.E. = %1.3f, 95%% CI [%1.3f, %1.3f]', 
+                          seSDiDp, 
+                          estimateSDiD - 1.96 * seSDiDp, 
+                          estimateSDiD + 1.96 * seSDiDp)
+
+label_n <- sprintf('N = %d', N_units)
+
+label_point
+label_boot
+label_jack
+label_placebo
+label_n
+```
+
+
+# 処置効果を図示
+
+```{r Fig9_SDiD, dpi = 300}
+# Bootstrap 法による結果をプロット
+g1 <- plot(estimateSDiD, se.method = 'bootstrap')
+
+# ラベルをプロット内に追加
+g2 <- g1 + 
+  scale_x_continuous(breaks = ~ axisTicks(., log = FALSE)) + 
+  annotate("text", x = 2016, y = 0.15, label = label_point, size = 3, hjust = 0) +
+  annotate("text", x = 2016, y = 0.10, label = label_boot, size = 3, hjust = 0) +
+  annotate("text", x = 2016, y = 0.05, label = label_jack, size = 3, hjust = 0) +
+  annotate("text", x = 2016, y = 0.00, label = label_placebo, size = 3, hjust = 0) +
+  annotate("text", x = 2016, y = -0.05, label = label_n, size = 3, hjust = 0)
+
+g2
+    
+# 図を保存
+ggsave("../../04_tex/main/Fig9.pdf", dpi = 300,
+       width=8, height=6)
+
+```
+
+## ウェイトの確認
+
+```{r weight, fig.width=7, fig.height=4}
+g_units <- synthdid_units_plot(estimateSDiD, se.method='placebo')
+# 対照群ウェイトのデータ
+control_weight <- g_units$data
+
+# ウェイトと組み合わせ表を結合
+control_weight2 <- merge(control_weight,
+                         pair_iso_map,
+                         by.x = "unit",
+                         by.y = "pair",
+                         all.x = TRUE)
+
+# 国別にウェイトを集計
+control_weight_country <- control_weight2 %>%
+  group_by(iso) %>%
+  summarise(weight = sum(weight),
+            y = sum(y * weight),
+            estimate = first(estimate)
+            )
+
+# `countrycode` で国名を付与
+library(countrycode)
+control_weight_country <- control_weight_country %>%
+  mutate(country_name = countrycode(iso,
+     origin = "iso3c",
+     destination = "country.name")
+  )
+
+# 集計済みウェイトを保存
+rio::export(control_weight_country, "../../03_data_output/synthdid_control_weight_entry_country.dta")
+```

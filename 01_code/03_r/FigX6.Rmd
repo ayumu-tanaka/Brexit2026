@@ -1,0 +1,256 @@
+---
+title: "Japan's Share of Inward FDI Stocks in the United Kingdom"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+# Purpose
+
+This temporary note calculates Japan's share of inward FDI stocks in the United
+Kingdom using the UIFS4 bilateral inward FDI stock data.
+
+The FDI stock values are interpreted as million USD, following Kox (2025).
+Missing bilateral cells are not interpreted as zeros; the denominator below is
+the sum of numerical UK inward FDI stock cells reported in the UIFS4 file for a
+given year.
+
+The calculation is:
+
+\[
+\text{Japan share}_{t}
+= \frac{\text{inward FDI stock in GBR from JPN}_{t}}
+{\sum_p \text{inward FDI stock in GBR from partner } p_{t}}
+\times 100.
+\]
+
+# Packages
+
+```{r packages}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(knitr)
+library(scales)
+```
+
+# Input data
+
+```{r inputs}
+fdi_path <- "../../02_data_input/Kox_UIFS4_bilat_inw_FDI_stocks_2001_2022.csv"
+geo_path <- "../../02_data_input/Standardised_geo_identifiers_UIFS4_database_v10.csv"
+
+fdi <- read_delim(fdi_path, delim = "|", show_col_types = FALSE)
+geo <- read_delim(geo_path, delim = "|", show_col_types = FALSE)
+```
+
+# Country codes
+
+```{r country-codes}
+country_codes <- geo %>%
+  filter(iso3 %in% c("GBR", "JPN")) %>%
+  select(iso3, ctry_name, region, continent)
+
+kable(country_codes)
+```
+
+# Calculation
+
+```{r calculate-share}
+uk_inward <- fdi %>%
+  filter(iso3_r == "GBR")
+
+uk_inward_total <- uk_inward %>%
+  group_by(year) %>%
+  summarise(
+    uk_inward_fdi_total = sum(inw_fdi_stock, na.rm = TRUE),
+    n_source_countries = n_distinct(iso3_p),
+    n_nonmissing_sources = sum(!is.na(inw_fdi_stock)),
+    .groups = "drop"
+  )
+
+uk_inward_from_japan <- uk_inward %>%
+  filter(iso3_p == "JPN") %>%
+  transmute(
+    year,
+    uk_inward_fdi_from_japan = inw_fdi_stock
+  )
+
+uk_japan_share <- uk_inward_total %>%
+  left_join(uk_inward_from_japan, by = "year") %>%
+  mutate(
+    japan_share = uk_inward_fdi_from_japan / uk_inward_fdi_total,
+    japan_share_percent = 100 * japan_share
+  ) %>%
+  arrange(year)
+```
+
+# Top Source Countries by Year
+
+```{r top-source-countries}
+non_country_codes <- c("WLD", "WLG", "XLG")
+
+uk_inward_ranking <- uk_inward %>%
+  filter(
+    !is.na(inw_fdi_stock),
+    inw_fdi_stock > 0,
+    !iso3_p %in% c("GBR", non_country_codes)
+  ) %>%
+  left_join(
+    geo %>% select(iso3, source_country = ctry_name),
+    by = c("iso3_p" = "iso3")
+  ) %>%
+  group_by(year) %>%
+  arrange(desc(inw_fdi_stock), .by_group = TRUE) %>%
+  mutate(rank = row_number()) %>%
+  ungroup() %>%
+  select(
+    year,
+    rank,
+    iso3_p,
+    source_country,
+    uk_inward_fdi_stock = inw_fdi_stock
+  )
+
+uk_inward_ranking %>%
+  filter(rank <= 10) %>%
+  mutate(uk_inward_fdi_stock = round(uk_inward_fdi_stock, 2)) %>%
+  kable(
+    col.names = c(
+      "Year",
+      "Rank",
+      "Source ISO3",
+      "Source country",
+      "UK inward FDI stock (million USD)"
+    )
+  )
+```
+
+# Result
+
+```{r result-table}
+uk_japan_share %>%
+  mutate(
+    uk_inward_fdi_total = round(uk_inward_fdi_total, 2),
+    uk_inward_fdi_from_japan = round(uk_inward_fdi_from_japan, 2),
+    japan_share_percent = round(japan_share_percent, 2)
+  ) %>%
+  select(
+    year,
+    uk_inward_fdi_total,
+    uk_inward_fdi_from_japan,
+    japan_share_percent,
+    n_nonmissing_sources
+  ) %>%
+  kable(
+    col.names = c(
+      "Year",
+      "UK inward FDI total (million USD)",
+      "UK inward FDI from Japan (million USD)",
+      "Japan share (%)",
+      "Non-missing source countries"
+    )
+  )
+```
+
+# Plot
+
+```{r plot-share, fig.width=7, fig.height=4}
+ggplot(uk_japan_share, aes(x = year, y = japan_share)) +
+  geom_line(linewidth = 0.8, color = "#2B6CB0") +
+  geom_point(size = 1.8, color = "#2B6CB0") +
+  scale_x_continuous(breaks = seq(2001, 2022, by = 3)) +
+  scale_y_continuous(labels = percent_format(accuracy = 0.1)) +
+  labs(
+    x = NULL,
+    y = "Japan's share of UK inward FDI stocks",
+    title = "Japan's Share of Inward FDI Stocks in the United Kingdom"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+# FDI Stock Trends
+
+```{r plot-fdi-stocks, fig.width=7, fig.height=5}
+p_fdi_stocks <- uk_japan_share %>%
+  select(
+    year,
+    `UK inward FDI total` = uk_inward_fdi_total,
+    `UK inward FDI from Japan` = uk_inward_fdi_from_japan
+  ) %>%
+  pivot_longer(
+    cols = -year,
+    names_to = "series",
+    values_to = "fdi_stock"
+  ) %>%
+  ggplot(aes(x = year, y = fdi_stock, color = series)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.8) +
+  facet_wrap(~series, ncol = 1, scales = "free_y") +
+  scale_x_continuous(breaks = seq(2001, 2022, by = 3)) +
+  scale_y_continuous(labels = comma) +
+  scale_color_manual(
+    values = c(
+      "UK inward FDI total" = "#2B6CB0",
+      "UK inward FDI from Japan" = "#C05621"
+    )
+  ) +
+  labs(
+    x = NULL,
+    y = "Inward FDI stock (million USD)",
+    title = "UK Inward FDI Stocks: Total and From Japan"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold")
+  )
+
+p_fdi_stocks
+
+ggsave(
+  "../../04_tex/oa/FigX6.eps",
+  p_fdi_stocks,
+  device = cairo_ps,
+  width = 7,
+  height = 5,
+  dpi = 300
+)
+```
+
+# Latest year
+
+```{r latest-year}
+uk_japan_share %>%
+  filter(year == max(year, na.rm = TRUE)) %>%
+  mutate(
+    uk_inward_fdi_total = round(uk_inward_fdi_total, 2),
+    uk_inward_fdi_from_japan = round(uk_inward_fdi_from_japan, 2),
+    japan_share_percent = round(japan_share_percent, 2)
+  ) %>%
+  select(year, uk_inward_fdi_total, uk_inward_fdi_from_japan, japan_share_percent) %>%
+  kable(
+    col.names = c(
+      "Year",
+      "UK inward FDI total (million USD)",
+      "UK inward FDI from Japan (million USD)",
+      "Japan share (%)"
+    )
+  )
+```

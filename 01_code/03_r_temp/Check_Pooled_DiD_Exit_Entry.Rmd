@@ -1,0 +1,286 @@
+---
+title: "Pooled DiD Estimates for Exit and Entry"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  cache = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+# Load packages
+
+```{r load-packages}
+library(tidyverse)
+library(fixest)
+library(kableExtra)
+```
+
+# Load exit data
+
+```{r load-exit-data}
+aff_eu <- rio::import("../../03_data_output/affiliate_panel_brexit_eu_sample.dta")
+aff_highEU <- rio::import("../../03_data_output/affiliate_panel_brexit_high_income_eu_sample.dta")
+
+# Use only the biennial-compatible sample to avoid mixing annual and biennial intervals
+keep_years <- c(2010, 2012, 2014, 2016, 2018, 2020)
+
+aff_eu <- aff_eu %>%
+  filter(year %in% keep_years)
+
+aff_highEU <- aff_highEU %>%
+  filter(year %in% keep_years)
+```
+
+# Estimate pooled DiD models for exit
+
+```{r pooled-did-exit}
+pooled_exit_high_income_eu <- feols(
+  exitit ~ Brexit | year + AffiliateCode,
+  data = aff_highEU,
+  vcov = ~country
+)
+
+pooled_exit_eu <- feols(
+  exitit ~ Brexit | year + AffiliateCode,
+  data = aff_eu,
+  vcov = ~country
+)
+
+etable(pooled_exit_high_income_eu, pooled_exit_eu)
+```
+
+# Construct country-industry-year exit counts
+
+```{r load-exit-count-data}
+exit_count_panel <- rio::import("../../03_data_output/affiliate_panel_brexit_full_sample.dta") %>%
+  filter(year %in% keep_years) %>%
+  transmute(
+    iso = country,
+    FASector,
+    year,
+    exitit,
+    highEU = as.integer(highEU),
+    EU_all = as.integer(EU_all),
+    GBR = as.integer(GBR)
+  )
+
+exit_cells <- exit_count_panel %>%
+  distinct(iso, FASector, highEU, EU_all, GBR)
+
+exit_count_panel <- tidyr::expand_grid(exit_cells, year = keep_years) %>%
+  left_join(
+    exit_count_panel %>%
+      group_by(iso, FASector, year) %>%
+      summarise(N_exit = sum(exitit, na.rm = TRUE), .groups = "drop"),
+    by = c("iso", "FASector", "year")
+  ) %>%
+  mutate(
+    N_exit = replace_na(N_exit, 0L),
+    Brexit = as.integer(GBR == 1 & year >= 2016),
+    year_sector = interaction(year, FASector, drop = TRUE),
+    sample_HI = highEU == 1,
+    sample_EU = EU_all == 1 | GBR == 1
+  )
+```
+
+# Estimate pooled DiD models for exit counts
+
+```{r pooled-did-exit-count}
+pooled_exit_count_high_income_eu <- fepois(
+  N_exit ~ GBR + Brexit | year_sector,
+  data = exit_count_panel %>% filter(sample_HI),
+  vcov = ~iso^FASector
+)
+
+pooled_exit_count_eu <- fepois(
+  N_exit ~ GBR + Brexit | year_sector,
+  data = exit_count_panel %>% filter(sample_EU),
+  vcov = ~iso^FASector
+)
+
+etable(pooled_exit_count_high_income_eu, pooled_exit_count_eu)
+```
+
+# Load entry data
+
+```{r load-entry-data}
+entry_panel <- rio::import("../../03_data_output/N_affiliate_entry_country_industry_year.dta") %>%
+  filter(
+    year %in% keep_years,
+    FA_SectorCode2009 != 0,
+    iso != ""
+  ) %>%
+  mutate(
+    EU = as.integer(EU),
+    GBR = as.integer(iso == "GBR"),
+    Brexit = as.integer(iso == "GBR" & year >= 2016),
+    year_sector = interaction(year, FA_SectorCode2009, drop = TRUE)
+  )
+
+high_income_eu <- c(
+  "AUT", "BEL", "DNK", "FIN", "FRA", "DEU",
+  "IRL", "ITA", "LUX", "NLD", "SWE", "GBR"
+)
+
+entry_panel <- entry_panel %>%
+  mutate(
+    sample_HI = iso %in% high_income_eu,
+    sample_EU = EU == 1 | iso == "GBR"
+  )
+```
+
+# Estimate pooled DiD models for entry
+
+```{r pooled-did-entry}
+pooled_entry_high_income_eu <- fepois(
+  N ~ GBR + Brexit | year_sector,
+  data = entry_panel %>% filter(sample_HI),
+  vcov = ~iso^FA_SectorCode2009
+)
+
+pooled_entry_eu <- fepois(
+  N ~ GBR + Brexit | year_sector,
+  data = entry_panel %>% filter(sample_EU),
+  vcov = ~iso^FA_SectorCode2009
+)
+
+etable(pooled_entry_high_income_eu, pooled_entry_eu)
+```
+
+# Export table
+
+```{r export-table}
+fmt_num <- function(x) sprintf("%.3f", x)
+fmt_se  <- function(x) paste0("(", sprintf("%.3f", x), ")")
+
+extract_coef <- function(model, term = "Brexit") {
+  tibble::tibble(
+    estimate = unname(coef(model)[term]),
+    std_error = unname(sqrt(diag(vcov(model)))[term])
+  )
+}
+
+coef_exit_high  <- extract_coef(pooled_exit_high_income_eu)
+coef_exit_eu    <- extract_coef(pooled_exit_eu)
+coef_exit_count_high <- extract_coef(pooled_exit_count_high_income_eu)
+coef_exit_count_eu   <- extract_coef(pooled_exit_count_eu)
+coef_entry_high <- extract_coef(pooled_entry_high_income_eu)
+coef_entry_eu   <- extract_coef(pooled_entry_eu)
+
+tab_body <- tibble::tibble(
+  Term = c("Brexit referendum period", ""),
+  `(1)` = c(fmt_num(coef_exit_high$estimate), fmt_se(coef_exit_high$std_error)),
+  `(2)` = c(fmt_num(coef_exit_eu$estimate), fmt_se(coef_exit_eu$std_error)),
+  `(3)` = c(fmt_num(coef_exit_count_high$estimate), fmt_se(coef_exit_count_high$std_error)),
+  `(4)` = c(fmt_num(coef_exit_count_eu$estimate), fmt_se(coef_exit_count_eu$std_error)),
+  `(5)` = c(fmt_num(coef_entry_high$estimate), fmt_se(coef_entry_high$std_error)),
+  `(6)` = c(fmt_num(coef_entry_eu$estimate), fmt_se(coef_entry_eu$std_error))
+) %>%
+  add_row(
+    Term = "Observations",
+    `(1)` = as.character(nobs(pooled_exit_high_income_eu)),
+    `(2)` = as.character(nobs(pooled_exit_eu)),
+    `(3)` = as.character(nobs(pooled_exit_count_high_income_eu)),
+    `(4)` = as.character(nobs(pooled_exit_count_eu)),
+    `(5)` = as.character(nobs(pooled_entry_high_income_eu)),
+    `(6)` = as.character(nobs(pooled_entry_eu))
+  ) %>%
+  add_row(
+    Term = "Affiliate FE",
+    `(1)` = "Yes",
+    `(2)` = "Yes",
+    `(3)` = "",
+    `(4)` = "",
+    `(5)` = "",
+    `(6)` = ""
+  ) %>%
+  add_row(
+    Term = "Year FE",
+    `(1)` = "Yes",
+    `(2)` = "Yes",
+    `(3)` = "",
+    `(4)` = "",
+    `(5)` = "",
+    `(6)` = ""
+  ) %>%
+  add_row(
+    Term = "Year-sector FE",
+    `(1)` = "",
+    `(2)` = "",
+    `(3)` = "Yes",
+    `(4)` = "Yes",
+    `(5)` = "Yes",
+    `(6)` = "Yes"
+  ) %>%
+  add_row(
+    Term = "R-squared / Pseudo R-squared",
+    `(1)` = fmt_num(as.numeric(fixest::fitstat(pooled_exit_high_income_eu, "r2"))),
+    `(2)` = fmt_num(as.numeric(fixest::fitstat(pooled_exit_eu, "r2"))),
+    `(3)` = fmt_num(as.numeric(fixest::fitstat(pooled_exit_count_high_income_eu, "pr2"))),
+    `(4)` = fmt_num(as.numeric(fixest::fitstat(pooled_exit_count_eu, "pr2"))),
+    `(5)` = fmt_num(as.numeric(fixest::fitstat(pooled_entry_high_income_eu, "pr2"))),
+    `(6)` = fmt_num(as.numeric(fixest::fitstat(pooled_entry_eu, "pr2")))
+  )
+
+longnote <- paste(
+  "Notes: Columns (1) and (2) report pooled difference-in-differences estimates of the effect of the Brexit referendum on affiliate exit probability using affiliate-level panels.",
+  "Columns (3) and (4) report pooled Poisson QMLE DiD estimates for country-industry-year exit counts.",
+  "Columns (5) and (6) report pooled Poisson QMLE DiD estimates for the count of new Japanese affiliate entries using host-country-industry cells.",
+  "In all columns, the pooled post-referendum treatment variable equals one for UK observations in 2016, 2018, and 2020 and zero otherwise.",
+  "To avoid mixing biennial and annual observations, the estimation sample is restricted to 2010, 2012, 2014, 2016, 2018, and 2020.",
+  "Columns (1), (3), and (5) use high-income EU countries as the comparison group, while Columns (2), (4), and (6) use all EU countries as the comparison group.",
+  "Standard errors are clustered at the country level in the affiliate-level exit columns and at the country-by-industry level in the exit-count and entry-count columns.",
+  "In the Poisson columns, observations with only zero outcomes or singleton fixed effects are dropped automatically by the estimator.",
+  "* $p<0.05$, ** $p<0.01$, *** $p<0.001$."
+)
+
+tab_html <- kbl(
+  tab_body,
+  format = "html",
+  escape = FALSE,
+  caption = "Pooled DiD Estimates of the Brexit Referendum on Exit and Entry",
+  col.names = c("", "(1)", "(2)", "(3)", "(4)", "(5)", "(6)")
+) |>
+  add_header_above(c(" " = 1, "Exit probability" = 2, "Exit count" = 2, "New affiliate entry count" = 2)) |>
+  kable_styling(full_width = FALSE, position = "center")
+
+tab_html
+
+tab_latex <- kbl(
+  tab_body,
+  format = "latex",
+  booktabs = TRUE,
+  escape = FALSE,
+  caption = "Pooled DiD Estimates of the Brexit Referendum on Exit and Entry",
+  label = "pooled_exit_entry_did",
+  align = "lcccccc",
+  linesep = "",
+  col.names = c("", "(1)", "(2)", "(3)", "(4)", "(5)", "(6)")
+) |>
+  add_header_above(c(" " = 1, "Exit probability" = 2, "Exit count" = 2, "New affiliate entry count" = 2)) |>
+  kable_styling(latex_options = c("hold_position"))
+
+tab_latex <- as.character(tab_latex)
+tab_latex <- gsub("\\\\begin\\{table\\}\\[!h\\]", "\\\\begin{table}[!ht]", tab_latex)
+note_latex <- paste0(
+  "\\\\end{tabular}\n",
+  "\\\\par\n\\\\medskip\n",
+  "\\\\parbox{\\\\linewidth}{\\\\footnotesize ",
+  longnote,
+  "}"
+)
+tab_latex <- gsub("\\\\end\\{tabular\\}", note_latex, tab_latex)
+
+writeLines(tab_latex, "../../04_tex/main/TabX.tex")
+```

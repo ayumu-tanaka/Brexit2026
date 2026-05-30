@@ -1,0 +1,114 @@
+---
+title: "Sample Retention from Restricting to Affiliates Present in 2010"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+# Purpose
+
+This temporary note calculates how much of the affiliate sample is retained
+when the exit analysis is restricted to affiliates that were already present in
+2010.
+
+The goal is to answer the referee's question about the share of firms and
+observations that remain in the analysis sample.
+
+# Packages
+
+```{r packages}
+library(rio)
+library(dplyr)
+library(tibble)
+library(knitr)
+```
+
+# Input data
+
+```{r input-data}
+# This panel is upstream of the Brexit estimation samples and still contains the
+# full set of affiliate-year observations with country identifiers.
+affiliate_panel <- import("../../03_data_output/Affiliate/affiliate_panel_with_country_covariates.dta") %>%
+  filter(year >= 2010, year <= 2020)
+
+# High-income EU countries used in the baseline exit analysis.
+high_income_eu <- c(
+  "AUT", "BEL", "DEU", "DNK", "FIN", "FRA",
+  "GBR", "IRL", "ITA", "LUX", "NLD", "SWE"
+)
+```
+
+# Helper functions
+
+```{r helpers}
+calculate_retention <- function(df, sample_name) {
+  affiliates_2010 <- df %>%
+    filter(year == 2010) %>%
+    distinct(AffiliateCode) %>%
+    pull(AffiliateCode)
+
+  retained_df <- df %>%
+    filter(AffiliateCode %in% affiliates_2010)
+
+  tibble(
+    sample = sample_name,
+    affiliates_full = n_distinct(df$AffiliateCode),
+    affiliates_retained = n_distinct(retained_df$AffiliateCode),
+    affiliates_share_retained = n_distinct(retained_df$AffiliateCode) / n_distinct(df$AffiliateCode),
+    observations_full = nrow(df),
+    observations_retained = nrow(retained_df),
+    observations_share_retained = nrow(retained_df) / nrow(df)
+  )
+}
+
+format_share <- function(x) sprintf("%.1f%%", 100 * x)
+```
+
+# Retention by sample
+
+```{r retention-table}
+full_sample <- affiliate_panel
+
+eu_sample <- affiliate_panel %>%
+  filter(euall == 1)
+
+high_income_eu_sample <- affiliate_panel %>%
+  filter(iso %in% high_income_eu)
+
+retention_table <- bind_rows(
+  calculate_retention(full_sample, "Full sample"),
+  calculate_retention(eu_sample, "EU sample"),
+  calculate_retention(high_income_eu_sample, "High-income EU sample")
+) %>%
+  mutate(
+    affiliates_share_retained = format_share(affiliates_share_retained),
+    observations_share_retained = format_share(observations_share_retained)
+  )
+
+kable(
+  retention_table,
+  caption = "Share of affiliates and affiliate-year observations retained by restricting the sample to affiliates present in 2010"
+)
+```
+
+# Notes for interpretation
+
+```{r notes}
+retention_table
+```
+
+The figures above compare:
+
+- the full 2010--2020 affiliate-year panel in each sample, and
+- the retained panel after keeping only affiliates that are already observed in 2010.
+
+This is the sample restriction used for the exit analysis in the main paper.

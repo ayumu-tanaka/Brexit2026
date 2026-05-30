@@ -1,0 +1,126 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+
+\title{Export Platform vs Market Seeking Ideas}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+I think what we are thinking about the orientation of the firm's investments in the EU.  If this is the case, we have to work around the issue that we dont have sales data. Unless we can use the Toyo Kezai data about the firm's intent for each investment (I don't know how reliable this data is, or if anyone else has used it), we have to try and create some proxies.  I/ChatGPT have some ideas
+
+\section{Production--Distribution Separation Indicator}
+
+The first indicator captures the geographic separation between production and sales affiliates.
+
+Let
+
+\[
+M_{ij} = \text{number of manufacturing affiliates of firm } i \text{ in country } j
+\]
+
+\[
+S_{ij} = \text{number of sales or wholesale affiliates of firm } i \text{ in country } j
+\]
+
+Define the export-platform indicator:
+
+\[
+EP_i =
+\frac{\text{Number of countries with sales affiliates but no manufacturing}}
+{\text{Total number of countries with affiliates}}
+\]
+
+High values of this indicator suggest export-platform behavior because the firm produces in a limited set of countries while distributing products across many markets.
+
+\section{Production Concentration vs. Market Coverage Index}
+
+A second approach compares the geographic concentration of manufacturing and distribution activities.
+
+Manufacturing concentration can be measured using a Herfindahl index:
+
+\[
+H_M = \sum_j
+\left(
+\frac{M_{ij}}{\sum_j M_{ij}}
+\right)^2
+\]
+
+Similarly, sales concentration is:
+
+\[
+H_S = \sum_j
+\left(
+\frac{S_{ij}}{\sum_j S_{ij}}
+\right)^2
+\]
+
+The export-platform signal is then defined as
+
+\[
+EP_i = H_M - H_S
+\]
+
+If manufacturing is significantly more concentrated than sales activities (\(H_M > H_S\)), this pattern is consistent with export-platform FDI.
+
+\section{Production Hub Indicator}
+
+Another useful metric identifies production hubs within the multinational network. If a manufacturing affiliate exists in a country where the firm does not maintain a local sales affiliate, the plant is likely exporting to other European markets.
+
+Define
+
+\[
+ExportPlatformShare_i =
+\frac{\text{Manufacturing affiliates without a local sales affiliate}}
+{\text{Total manufacturing affiliates}}
+\]
+
+A high value indicates that production facilities are likely serving external markets rather than the local host-country market.
+
+\section{Example Structure}
+
+Table \ref{tab:example} illustrates a typical export-platform structure.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+Country & Manufacturing Affiliate & Sales Affiliate \\
+\midrule
+Ireland & Yes & Yes \\
+Germany & No & Yes \\
+France & No & Yes \\
+Italy & No & Yes \\
+Spain & No & Yes \\
+\bottomrule
+\end{tabular}
+\caption{Example structure of export-platform FDI}
+\label{tab:example}
+\end{table}
+
+In this example, Ireland functions as the production hub, while sales affiliates in other countries distribute goods throughout the European market.
+
+\section{Why This Works with Toyo Keizai Data}
+
+Datasets such as Toyo Keizai provide affiliate-level information on location, industry classification, and parent firm identity. Even when export flows are unobserved, the geographic separation between production and distribution affiliates allows researchers to infer export-platform strategies.
+
+\section{Typical Empirical Description}
+
+A typical description in empirical work is as follows:
+
+\begin{quote}
+Because affiliate-level export data are unavailable, export-platform strategies are proxied using the geographic separation of production and distribution affiliates. Firms whose manufacturing operations are concentrated in a limited number of countries while maintaining sales subsidiaries across multiple European markets are classified as engaging in export-platform FDI.
+\end{quote}
+
+We may wish to look at this\\
+
+https://www.sciencedirect.com/science/article/abs/pii/S0969593105000971
+
+"This study explores the roles and characteristics of foreign owned subsidiaries in a small economy within a trading block. Four role types of foreign owned subsidiaries are identified: local satellite, truncated miniature replica, export platform, and the regional or world mandated hub. Evidence is provided on the sales focus of foreign owned subsidiaries in the Dutch electronics and electrical applications industry. We find that almost half of the foreign owned subsidiaries focus their sales on more markets than just the Netherlands. These subsidiaries use the Netherlands as an export base. They supply the European market with products that are produced in one location, instead of using multiple production plants. The results show that these subsidiaries with a non-European parent are relatively young and focus also on manufacturing activities."
+
+
+\end{document}

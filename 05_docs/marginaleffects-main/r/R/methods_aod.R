@@ -1,0 +1,49 @@
+#' @rdname get_predict
+#' @export
+get_predict.glimML <- function(
+    model,
+    newdata = get_modeldata(model),
+    type = "response",
+    ...) {
+    insight::check_if_installed("aod")
+
+    out <- aod::predict(model, newdata = newdata, type = type, ...)
+    out <- data.table(estimate = out)
+    out <- add_rowid(out, newdata)
+
+    return(out)
+}
+
+
+#' @rdname set_coef
+#' @export
+set_coef.glimML <- function(model, coefs, ...) {
+    # in basic model classes coefficients are named vector
+    model@fixed.param[names(coefs)] <- coefs
+    model
+}
+
+
+#' @rdname get_vcov
+#' @export
+get_vcov.glimML <- function(model, vcov = NULL, ...) {
+    insight::check_if_installed("aod")
+    if (!is.null(vcov) && !is.logical(vcov)) {
+        stop("The `vcov` argument is not supported for this kind of model.")
+    }
+    vcov <- sanitize_vcov(model, vcov)
+    aod::vcov(model)
+}
+
+
+#' @rdname sanitize_model_specific
+sanitize_model_specific.glimML <- function(model, ...) {
+    mdat <- get_modeldata(model)
+    cl <- detect_variable_class(mdat, model = model)
+    if (isTRUE("character" %in% cl)) {
+        stop_sprintf(
+            "This function does not support character predictors. Please convert them to factors before fitting the model."
+        )
+    }
+    return(model)
+}

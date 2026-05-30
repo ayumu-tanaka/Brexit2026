@@ -1,0 +1,38 @@
+\begin{table}[ht]
+\centering
+\caption{\label{tab:Table-ETWFE-OLS}Impacts of Brexit (ETWFE model, OLS)}
+\centering
+\begin{threeparttable}
+\begin{tabular}[t]{lcccc}
+\toprule
+\multicolumn{1}{c}{ } & \multicolumn{2}{c}{Exit probability} & \multicolumn{2}{c}{Ownership ratio} \\
+\cmidrule(l{3pt}r{3pt}){2-3} \cmidrule(l{3pt}r{3pt}){4-5}
+\multicolumn{1}{c}{ } & \multicolumn{1}{c}{(1)} & \multicolumn{1}{c}{(2)} & \multicolumn{1}{c}{(3)} & \multicolumn{1}{c}{(4)} \\
+\cmidrule(l{3pt}r{3pt}){2-2} \cmidrule(l{3pt}r{3pt}){3-3} \cmidrule(l{3pt}r{3pt}){4-4} \cmidrule(l{3pt}r{3pt}){5-5}
+  & High income EU & EU & High income EU  & EU \\
+\midrule
+UK × Year 2016 & 0.010 & 0.006 & -0.008 & -0.006\\
+ & (0.026) & (0.023) & (0.026) & (0.022)\\
+UK × Year 2017 & 0.013 & 0.010 & -0.011 & -0.012\\
+ & (0.031) & (0.026) & (0.030) & (0.025)\\
+UK × Year 2018 & 0.006 & 0.002 & -0.008 & -0.008\\
+ & (0.028) & (0.025) & (0.028) & (0.024)\\
+UK × Year 2019 & 0.027 & 0.022 & -0.029 & -0.027\\
+ & (0.029) & (0.026) & (0.028) & (0.024)\\
+UK × Year 2020 & 0.030 & 0.025 & -0.031 & -0.030\\
+ & (0.032) & (0.028) & (0.029) & (0.025)\\
+\midrule
+Num.Obs. & 13552 & 15424 & 13462 & 15319\\
+Group Fixed-Effects & Yes & Yes & Yes & Yes\\
+Year Fixed-Effects & Yes & Yes & Yes & Yes\\
+R2 & 0.080 & 0.080 & 0.063 & 0.063\\
+\bottomrule
+\multicolumn{5}{l}{\rule{0pt}{1em}* p $<$ 0.05, ** p $<$ 0.01, *** p $<$ 0.001}\\
+\multicolumn{5}{l}{\rule{0pt}{1em}}\\
+\end{tabular}
+\begin{tablenotes}
+\item \textit{Note: } 
+\item Marginal effects from \cite{wooldridge2021two}'s extended two-way fixed effects (ETWFE) model are reported in the table. Standard errors are clustered at the country level and presented in parentheses. The data are affiliate-level balanced panel data from the OJC data. The estimation uses data from 2010 to 2021, with the post-treatment period defined as 2016–2021. To improve computational efficiency, the estimation employs group-level (i.e., country-level) fixed effects instead of unit-level (i.e., affiliate-level) fixed effects. This estimation strategy follows \cite{wooldridge2021two}, which demonstrates the equivalence of group- and unit-level fixed effects in linear models. The R package `etwfe` is used for implementation.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}

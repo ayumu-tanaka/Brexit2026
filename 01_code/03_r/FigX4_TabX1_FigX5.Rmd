@@ -1,0 +1,482 @@
+---
+title: "現地法人退出の生存分析"
+author: "Ayumu Tanaka"
+date: "2024-05-24"
+#   pdf_document: 
+#     latex_engine: xelatex 
+# documentclass: bxjsarticle
+# classoption: xelatex,ja=standard
+# geometry: no
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+
+
+# パッケージの読み込み
+
+```{r load-data-package}
+# データの読み込み
+library(survival)
+library(tidyverse)
+library(rio)
+library(lubridate)
+library(ggsurvfit)
+library(gtsummary)
+library(tidycmprsk)
+library(magick)
+
+library(kableExtra)
+
+# devtools::install_github("zabore/condsurv")
+# condsurv is not required for the current appendix outputs.
+```
+
+
+# データの読み込み
+
+```{r load-data}
+# データの読み込み
+library(rio)
+aff_last <- rio::import("../../03_data_output/Affiliate/affiliate_last_observation_panel.dta")
+
+# Remove the observation if GBR is missing
+aff_last <- aff_last %>% filter(!is.na(GBR))
+
+# Check the distribution of missing values of Aff_size
+barplot(table(is.na(aff_last$Aff_size)),
+        main = "Distribution of missing values of Aff_size")
+
+# Replacing the Aff_size with country-year average of Aff_size if Aff_size is missing
+aff_last <- aff_last %>% 
+  group_by(iso, year) %>% 
+  mutate(Aff_size = ifelse(is.na(Aff_size), mean(Aff_size, na.rm = TRUE), Aff_size))
+
+
+
+# Check the distribution of missing values of Aff_size
+barplot(table(is.na(aff_last$Aff_size)),
+        main = "Distribution of missing values of Aff_size")
+```
+
+
+
+# 生存分析データの整形
+
+- Emily C. Zabor. [Survival Analysis in R](https://www.emilyzabor.com/tutorials/survival_analysis_in_r_tutorial.html)
+
+```{r survival-data}
+# Remove colomus if exit is NA
+aff_last <- aff_last %>% filter(!is.na(exit))
+
+# Remove colomus if survival_years is NA
+aff_last <- aff_last %>% filter(!is.na(survival_years))
+
+# status= 0 if censored==1, status=1 if event==1
+aff_last$status <- ifelse(aff_last$censored == 1, 0, 1)
+
+# Calculate the survival years by firm and country iso code
+Surv(aff_last$survival_years, aff_last$status)[1:10]
+
+# Kaplan-Meier survival curve
+s1 <- survfit(Surv(survival_years, status) ~ 1, data = aff_last)
+str(s1)
+
+```
+
+
+# Kaplan-Meier survival curve 1
+
+```{r Kaplan-Meier1}
+# Kaplan-Meier survival curve
+plot(s1, xlab = "Years", ylab = "Survival Probability", main = "Kaplan-Meier Curve")
+```
+
+# Kaplan-Meier survival curve 2
+
+
+```{r Kaplan-Meier2}
+# Kaplan-Meier survival curve
+survfit2(Surv(survival_years, status) ~ 1, data = aff_last) %>% 
+  ggsurvfit() +
+  labs(
+    x = "Years",
+    y = "Overall survival probability"
+  ) + 
+  add_confidence_interval() +
+  add_risktable()
+```
+
+# Comparison of survival curves
+
+## plot()
+
+- [Comparison of survival curves](https://epirhandbook.com/en/survival-analysis.html#comparison-of-survival-curves)
+
+
+```{r fig-comparison-KM, dpi= 300}
+# Create subsample of EU and GBR
+aff_last_eu <- aff_last %>% filter(EU_all == 1)
+
+# create the new survfit object based on GBR
+linelistsurv_fit_GBR <-  
+  survfit(Surv(survival_years, status) ~ GBR, 
+                                 data = aff_last_eu)
+
+# set colors
+col_group <- c("blue", "red")
+
+# create plot
+plot(
+  linelistsurv_fit_GBR,
+  col = col_group,
+  xlab = "Years",
+  ylab = "Survival Probability")
+
+# add legend
+legend(
+  "topright",
+  legend = c("EU affiliates","UK affiliates"),
+  col = col_group,
+  lty = 1,
+  cex = .9,
+  bty = "n")
+
+```
+
+## ggplot()
+
+```{r fig-comparison-KM-ggplot, dpi= 300}
+
+# create GBR2 = UK affiliate if GBR==1 and EU affiliate if GBR==0
+aff_last_eu$GBR2 <- ifelse(aff_last_eu$GBR == 1, "UK affiliate", "EU affiliate")
+
+km1<- survfit2(Surv(survival_years, status) ~ GBR2, 
+                                 data = aff_last_eu)
+
+
+ggsurvfit(km1) +
+  labs(
+    x = "Years",
+    y = "Overall survival probability"
+  ) + 
+  add_confidence_interval() +
+  add_risktable(risktable_stats = "n.risk") +
+  theme_minimal() 
+
+
+ggsave("../../04_tex/oa/FigX4.png", dpi = 300, width = 8, height = 6)
+
+```
+
+# Log-ranked test
+
+```{r log-rank-test}
+survdiff(Surv(survival_years, status) ~ GBR, data = aff_last_eu)
+
+```
+
+
+# 生存率の計算
+
+```{r survival-rate}
+survfit(Surv(survival_years, status) ~ 1, 
+        data = aff_last) %>% 
+  tbl_survfit(
+    times = 5,
+    label_header = "**5-year survival (95% CI)**"
+  )
+
+
+tbl1 <- survfit(Surv(survival_years, status) ~ 1, 
+        data = aff_last) %>% 
+  tbl_survfit(
+    times = c(5, 10, 15, 20),
+    label_header = "**{time}-year survival (95% CI)**"
+  )
+
+
+```
+
+
+## Data of survival rate
+
+```{r survival-rate-data}
+# 生存率データ
+prob <-  tbl1[["inputs"]][["x"]][[1]][["surv"]]
+year <-  tbl1[["inputs"]][["x"]][[1]][["time"]]
+surv <- data.frame(year,prob)
+```
+
+
+# Median survival time
+
+
+```{r median-survival-time}
+survfit(Surv(survival_years, status) ~ 1, data = aff_last) %>% 
+  tbl_survfit(
+    probs = 0.5,
+    label_header = "**Median survival (95% CI)**"
+  )
+```
+
+# Resacling the viariables
+
+```{r}
+# Dividing "Ratio", "Government_Effectiveness", "Political_Stability" by 100
+aff_last$Ratio <- aff_last$Ratio / 100
+#aff_last$Government_Effectiveness <- aff_last$Government_Effectiveness / 100
+#aff_last$Political_Stability <- aff_last$Political_Stability / 100
+#aff_last$Regulatory_Quality <- aff_last$Regulatory_Quality / 100
+
+```
+
+# Making the subsample
+
+```{r}
+# Restricting the European countries: EU_all==1
+aff_last_eu <- aff_last %>% filter(EU_all == 1)
+
+```
+
+# Barplot of exit year
+
+```{r barplot_year}
+# Barplot of exit year
+barplot(table(aff_last_eu$year[aff_last_eu$censored == 0]),
+        main = "Year of exit (Censored == 0)",
+        xlab = "Year",
+        ylab = "Number of affiliates")
+```
+
+
+# Cox proportional hazard model
+
+```{r cox-proportional-hazard-model}
+
+# Cox proportional hazard model without country fixed effects
+cox1 <- coxph(Surv(survival_years, status) ~ 
+        Brexit + Ratio + Aff_size + GBR 
+        + log(GDP_PPP) + log(GDP_per_capita) + log(Dist)
+        + factor(Parent_SectorCode) + factor(year),
+        data = aff_last)
+
+# Cox proportional hazard model with country fixed effects
+cox2 <- coxph(Surv(survival_years, status) ~ 
+        Brexit + Ratio + Aff_size 
+        + factor(Parent_SectorCode) + factor(year)
+        + factor(iso), 
+        data = aff_last)
+
+# Cox proportional hazard model without country fixed effects- EU countries
+cox3 <- coxph(Surv(survival_years, status) ~ 
+        Brexit + Ratio + Aff_size + GBR 
+        + log(GDP_PPP) + log(GDP_per_capita) + log(Dist)
+        + factor(Parent_SectorCode) + factor(year),
+        data = aff_last_eu)
+
+# Cox proportional hazard model with country fixed effects - EU countries
+cox4 <- coxph(Surv(survival_years, status) ~ 
+        Brexit + Ratio + Aff_size 
+        + factor(Parent_SectorCode) + factor(year)
+        + factor(iso), 
+        data = aff_last_eu)
+
+```
+
+
+# 推定表の出力
+
+```{r modelsummary-aff}
+library(modelsummary)
+
+coef_rename = c("Ratio" = "Ownership ratio", 
+                "N_Aff_EU" = "No. of non-UK EU affiliates",
+                "Aff_size" = "Affiliate size",
+                "log(GDP_PPP)" = "log GDP, PPP",
+                "log(GDP_per_capita)" = "log GDP per capita, PPP",
+                "Government_Effectiveness" = "Government Effectiveness",
+                "Political_Stability" = "Political Stability",
+                "Regulatory_Quality" = "Regulatory Quality",
+                "log(Dist)" = "log Distance from Japan") 
+
+
+models <- list(
+  "w/o country FEs" = cox1,
+  "with country FEs" = cox2,
+  "w/o country FEs" = cox3,
+  "with country FEs" = cox4)
+
+# add rows
+library(tibble)
+rows <- tribble(~term,    ~cox1,  ~cox2,    ~cox3,  ~cox4,
+                'Fixed Effect: Year',   'YES', 'YES',   'YES', 'YES',
+                'Fixed Effect: Sector', 'YES',   'YES', 'YES',   'YES',
+                'Fixed Effect: Country', 'NO',   'YES', 'NO',   'YES')
+attr(rows, 'position') <- c(15, 16, 17) # position of the above rows
+
+# longnote
+longnote <- "Hazard ratios are reported. The Cox proportional hazards model estimates them. Failure event is exit. Variables with hazard ratios greater than 1 are associated with a higher likelihood of exit and shorter survival time. Variables with a hazard ratio smaller than 1 are associated with a lower likelihood of exit and longer survival time. Host countries' fixed effects and year-fixed effects are included in the estimation. Standard errors are presented in blankets."
+
+# kableExtra は html_document 環境では knitr が knitr.table.format を上書きするため
+# HTML 出力になってしまい .tex への書き出しが機能しない。
+# そのため tinytable (modelsummary v2.0+ のデフォルトバックエンド) の
+# ネイティブ API を使って LaTeX テーブルを直接生成・保存する。
+library(tinytable)
+
+# 列見出しを (1)-(4) にしたモデルリストを作る。
+# group_tt() で World / Europe only のグループヘッダーを上段に追加する。
+models_for_tbl <- setNames(models, c("(1)", "(2)", "(3)", "(4)"))
+
+# estimation tables
+tbl_TabX1 <- modelsummary(models_for_tbl,
+             exponentiate = TRUE,  # exponentiate the coefficients
+             stars = c('*' = .05, '**' = .01, '***' = .001),  # add significance stars
+             fmt = fmt_sprintf("%.5f"),  # 5 decimal places
+             gof_omit = 'DF|Deviance|AIC|BIC|RMSE',
+             coef_omit = "Intercept|.*factor",  # omit intercept and factor variables
+             coef_rename = coef_rename,
+             title = 'Cox regression model at affiliate-level',
+             add_rows = rows,
+             notes = longnote,
+             output = "tinytable"
+             ) |>
+  group_tt(j = list("World" = 2:3, "Europe only" = 4:5))
+
+tabx1_path <- "../../04_tex/oa/TabX1.tex"
+save_tt(tbl_TabX1, output = tabx1_path, overwrite = TRUE)
+
+# Add the LaTeX label used by 04_tex/oa/brexit_OA.tex.
+tabx1_tex <- readLines(tabx1_path, warn = FALSE)
+tabx1_tex <- gsub(
+  "caption={Cox regression model at affiliate-level},",
+  "caption={Cox regression model at affiliate-level},\nlabel={tab:modelsummary-aff},",
+  tabx1_tex,
+  fixed = TRUE
+)
+writeLines(tabx1_tex, tabx1_path)
+
+
+# show the results
+modelsummary(models, 
+             exponentiate = TRUE, # exponentiate the coefficients
+             stars = c('*' = .05, '**' = .01, '***' = .001), # add significance stars
+             fmt = fmt_sprintf("%.5f"), # 5 decimal places
+             gof_omit = 'DF|Deviance|AIC|BIC|RMSE',
+             coef_omit = "Intercept|.*factor", # omit the intercept and factor variables
+             coef_rename = coef_rename,
+             title = 'Cox regression model at affiliate-level', # add a title
+             add_rows = rows, # add rows
+             output = "kableExtra"
+             ) %>% 
+    add_header_above(c(" " = 1, "(1)" = 1,  "(2)" = 1, "(3)" = 1,  "(4)" = 1)) %>% 
+    add_header_above(c(" " = 1, "World" = 2,  "Europe only" = 2))
+
+```
+
+# Modelplot
+
+## World
+
+```{r fig_modelplot_aff_world}
+# 全サンプル
+models1 <- list(
+  "Model 1: w/o country FEs" = cox1,
+  "Model 2: with country FEs" = cox2)
+
+# coeffient plot- world
+modelplot(models1, exponentiate = TRUE, 
+          coef_rename = coef_rename,
+          coef_omit = "Intercept|.*factor")
+
+```
+
+## EU only
+
+```{r fig_modelplot_aff_eu}
+# Europe only
+models2 <- list(
+  "Model 3: w/o country FEs" = cox3,
+  "Model 4: with country FEs" = cox4)
+
+# coeffient plot - EU
+modelplot(models2, exponentiate = TRUE, 
+          coef_rename = coef_rename,
+          coef_omit = "Intercept|.*factor")
+```
+## All
+
+```{r fig_modelplot_aff_all, dpi = 300}
+# All
+## Only display the Brexit coefficient
+coef_map = c("Brexit" = "Brexit")
+
+model_all <- list(
+  "Model 1: w/o country FEs" = cox1,
+  "Model 2: with country FEs" = cox2,
+  "Model 3: w/o country FEs" = cox3,
+  "Model 4: with country FEs" = cox4)
+
+modelplot(model_all, 
+          coef_map = coef_map,
+          exponentiate = TRUE)
+
+ggsave("../../04_tex/oa/FigX5.png", dpi = 300, width = 8, height = 6)
+```
+
+# Cox propotional test
+
+- The cox proportional tests produces the errors, presumably because of the correlation between covariates. 
+
+```
+# Cox propotional test
+cox1_ph_test <- survival::cox.zph(cox1) 
+cox1_ph_test
+
+cox2_ph_test <- survival::cox.zph(cox2)
+cox2_ph_test
+
+cox3_ph_test <- survival::cox.zph(cox3)
+cox3_ph_test
+
+cox4_ph_test <- survival::cox.zph(cox4)
+cox4_ph_test
+
+```
+
+Without fixed efffects, we can perform the cox proportional hazard test. The p-values of some variables are less than 0.05, indicating that the proportional hazard assumption is violated.
+
+
+```{r}
+cox10 <- coxph(Surv(survival_years, status) ~ 
+        Brexit + Ratio + Aff_size + GBR 
+        #+ log(GDP_PPP) + log(GDP_per_capita) + log(Dist)
+        ,
+        data = aff_last)
+
+modelsummary(cox10, exponentiate = TRUE, stars = c('*' = .05, '**' = .01, '***' = .001))
+
+cox10_ph_test <- survival::cox.zph(cox10) 
+cox10_ph_test
+```
+
+
+# References {-}
+
+
+- Survival analysis of "The Epidemiologist R Handbook", https://epirhandbook.com/en/survival-analysis.html
+- Emily C. Zabor. Survival analysis in R, https://www.emilyzabor.com/tutorials/survival_analysis_in_r_tutorial.html
+- `modelplot`, https://modelsummary.com/articles/modelplot.html
+- `modelsummary`, https://modelsummary.com/articles/modelsummary.html
+- `survival` package, https://github.com/therneau/survival

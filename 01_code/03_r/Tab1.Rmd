@@ -1,0 +1,349 @@
+---
+title: "2x2 DiD"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rio)
+library(fixest)
+library(modelsummary)
+library(kableExtra)
+# tinytable (modelsummary >= 1.4 のデフォルト) は tabularray + \num{} を出力し
+# siunitx パッケージが必要になる。kableExtra に切り替えることで
+# 標準的な booktabs 表を生成し siunitx への依存を排除する。
+options(modelsummary_factory_latex = "kableExtra")
+options(modelsummary_factory_html = "kableExtra")
+```
+
+# データの読み込みと準備
+
+## 共通設定
+
+```{r settings}
+# 分析対象の年次
+keep_years <- seq(2010, 2020, by = 2)
+# 高所得EU諸国のリスト（対照群と英国）
+EU_HI <- c("AUT", "BEL", "DNK", "FIN", "FRA", "DEU", "IRL", "ITA", "LUX", "NLD", "SWE", "GBR")
+# 表示用の係数名のマッピング
+cm <- c(
+  "UK"             = "UK",
+  "Post_Referendum" = "Post-Referendum",
+  "UK:Post_Referendum" = "UK x Post-Referendum"
+)
+```
+
+## 産業×国×年レベルの参入・退出・現地法人総数
+
+```{r load-industry}
+df_entry_exit_count <- import("../../03_data_output/EntryExit/N_affiliate_entry_exit.dta") %>%
+  filter(iso %in% EU_HI, year %in% keep_years) %>%
+  complete(iso, FASector, year = keep_years) %>%
+  mutate(
+    N_entry_industry = replace_na(N_entry_industry, 0),
+    N_exit_industry  = replace_na(N_exit_industry,  0),
+    N_total_industry = replace_na(N_total_industry, 0),
+    UK               = as.integer(iso == "GBR"),
+    Post_Referendum  = as.integer(year >= 2016),
+    country_industry = as.character(interaction(iso, FASector, drop = TRUE))
+  )
+```
+
+# 産業×国×年レベルの分析
+
+## 推定
+
+```{r estimation-industry}
+# (3) 現地法人総数（固定効果なし、国レベルクラスタリング）
+res_aff_industry <- fepois(
+  N_total_industry ~ UK * Post_Referendum,
+  data = df_entry_exit_count,
+  cluster = ~iso
+)
+
+# (4) 退出件数（固定効果なし、国レベルクラスタリング）
+res_exit_industry <- fepois(
+  N_exit_industry ~ UK * Post_Referendum,
+  data = df_entry_exit_count,
+  cluster = ~iso
+)
+
+# (5) 参入件数（固定効果なし、国レベルクラスタリング）
+res_entry_industry <- fepois(
+  N_entry_industry ~ UK * Post_Referendum,
+  data = df_entry_exit_count,
+  cluster = ~iso
+)
+```
+
+## 参入・退出差の検定
+
+絶対値差 $|\beta_\text{entry}| - |\beta_\text{exit}|$ の検定をスタック PPML モデルの係数と分散共分散行列からデルタ法で計算する。
+
+ブレグジット後は「退出増加（$\beta_\text{exit} > 0$）・参入減少（$\beta_\text{entry} < 0$）」が想定されるため、以下が成立する：
+
+$$|\beta_\text{entry}| - |\beta_\text{exit}| = -\beta_\text{entry} - \beta_\text{exit} = -(\beta_\text{entry} + \beta_\text{exit})$$
+
+スタックモデルでは "Exits" が参照カテゴリなので、$\alpha \equiv \beta_\text{exit}$、$\delta \equiv \beta_\text{entry} - \beta_\text{exit}$ とおくと $\beta_\text{entry} + \beta_\text{exit} = 2\alpha + \delta$ となり、デルタ法で SE を求められる：
+
+$$\text{SE}\!\left(|\beta_\text{entry}| - |\beta_\text{exit}|\right) = \sqrt{[2,\,1]\,\boldsymbol{\Sigma}_{(\alpha,\,\delta)}\,[2,\,1]^\top}$$
+
+**前提条件**：$\beta_\text{exit} > 0$（退出増加）かつ $\beta_\text{entry} < 0$（参入減少）が成立する場合にのみ $|\beta| = -\beta$ の変換が有効である。`abs(beta_entry) - abs(beta_exit)` は常に正しい絶対値差を返すが、デルタ法の SE は線形近似に基づくため、係数が 0 付近の場合は注意が必要。
+
+```{r cross-margin-test}
+df_entry_exit_long <- df_entry_exit_count %>%
+  select(iso, FASector, year, UK, Post_Referendum, N_exit_industry, N_entry_industry) %>%
+  pivot_longer(
+    cols = c(N_exit_industry, N_entry_industry),
+    names_to = "margin",
+    values_to = "count"
+  ) %>%
+  mutate(
+    margin = recode(margin,
+                    N_exit_industry  = "Exits",
+                    N_entry_industry = "New Entry"),
+    margin = factor(margin, levels = c("Exits", "New Entry"))
+  )
+
+res_entry_exit_diff <- fepois(
+  count ~ margin * UK * Post_Referendum,
+  data = df_entry_exit_long,
+  cluster = ~iso
+)
+
+# スタックモデルから係数ベクトルと分散共分散行列を取得
+coef_stack <- coef(res_entry_exit_diff)
+vcov_stack <- vcov(res_entry_exit_diff)
+
+# "Exits" が参照カテゴリなので各係数の意味は以下の通り：
+#   coef["UK:Post_Referendum"]                    = β_exit
+#   coef["marginNew Entry:UK:Post_Referendum"]     = β_entry − β_exit
+# これらから β_exit と β_entry を復元する
+beta_exit  <- coef_stack["UK:Post_Referendum"]
+beta_entry <- coef_stack["UK:Post_Referendum"] +
+              coef_stack["marginNew Entry:UK:Post_Referendum"]
+
+# |β_entry| − |β_exit| の点推定値
+# β_exit > 0・β_entry < 0 を前提とすると
+#   |β_entry| − |β_exit| = (−β_entry) − β_exit = −(β_entry + β_exit) = −(2α + δ)
+entry_exit_diff_coef <- abs(beta_entry) - abs(beta_exit)
+
+# デルタ法による SE の計算
+# Var(β_entry + β_exit) = Var(2α + δ) = 4·Var(α) + 4·Cov(α, δ) + Var(δ)
+# |β_entry| − |β_exit| = −(β_entry + β_exit) なので SE は同じ
+c_vec <- c("UK:Post_Referendum" = 2, "marginNew Entry:UK:Post_Referendum" = 1)
+idx   <- names(c_vec)
+entry_exit_diff_se <- sqrt(as.numeric(
+  t(c_vec) %*% vcov_stack[idx, idx] %*% c_vec
+))
+
+# z 統計量と両側 p 値
+z_abs_diff         <- entry_exit_diff_coef / entry_exit_diff_se
+entry_exit_diff_p  <- 2 * pnorm(-abs(z_abs_diff))
+```
+
+## 結果の表示
+
+```{r summary-industry}
+models_industry <- list(
+  "Total Affiliates" = res_aff_industry,
+  "Exits"            = res_exit_industry,
+  "New Entry"        = res_entry_industry
+)
+
+modelsummary(models_industry,
+             output = "markdown",
+             stars = TRUE,
+             fmt = 3,
+             gof_omit = "Log.Lik.|Pseudo.R2|AIC|BIC",
+             coef_map = cm)
+
+tibble(
+  term      = "|New Entry DiD| - |Exit DiD|",
+  estimate  = entry_exit_diff_coef,
+  std_error = entry_exit_diff_se,
+  p_value   = entry_exit_diff_p
+)
+```
+
+## 推定結果の解釈
+
+### 主要な発見：非対称な調整
+
+3つの DiD 係数（UK × Post-Referendum）を比較すると、明確な非対称パターンが浮かびます。
+
+| 結果変数 | DiD 係数 | 有意性 | 解釈 |
+|---|---|---|---|
+| 現地法人総数 | −0.040 | 非有意 | 総数への短期的影響なし |
+| 退出 | +0.004 | 非有意 | 撤退加速なし |
+| 新規参入 | −0.298 | *** | **新規投資が有意に減少** |
+
+---
+
+### 係数の大きさ：定量的解釈
+
+PPML では係数を対数変化率として解釈します。新規参入の DiD 係数 −0.298 は：
+
+$$\exp(-0.298) - 1 \approx -25.8\%$$
+
+すなわち、**国民投票後、英国への日系新規参入件数は比較群（高所得 EU 諸国）と比べて約 26% 有意に減少した**ことを示します。
+
+また、前の絶対値差検定（0.294, $p = 0.013$）との整合性も確認できます：
+
+$$|\hat\beta_\text{entry}| - |\hat\beta_\text{exit}| = 0.298 - 0.004 = 0.294$$
+
+---
+
+### 経済的解釈：リアルオプション効果
+
+この非対称性（退出は無反応・参入は有意に減少）は、**リアルオプション理論**（Dixit & Pindyck 1994; Bloom 2009）と整合的です。
+
+**退出が有意でない理由**
+
+既存法人の撤退には埋没費用（雇用・設備・取引関係）が伴い、不確実性が高まっても即座には動きにくい。「待つ価値」がサンクコスト回収コストを上回る。
+
+**参入が有意に減少した理由**
+
+新規投資はまだコミットしていないため、Brexit 後の市場アクセスや規制の不確実性が高まると「様子見」が合理的になる。英国がかつて担っていた「EU 市場へのゲートウェイ」としての魅力が国民投票後に消失したことも一因と考えられます。
+
+**総数への影響が短期的に非有意な理由**
+
+退出は増えず参入のみが減少しているため、**短期的には在庫（ストック）への影響は限定的**です。ただし、参入減少が続けばストックは長期的に漸減していく構造です（フロー→ストックの時間差）。
+
+---
+
+### UK 主効果について
+
+UK の主効果（1.5〜1.7）が大きく有意なのは、英国が比較群の高所得 EU 諸国より規模が大きく、日系 FDI の主要な受入先であることを反映しているにすぎません。DiD はこの水準差を差し引いた上でブレグジットの効果を識別しており、解釈上の問題はありません。
+
+## 結果の解釈
+
+### 何を示しているか
+
+PPML の係数は対数スケールの変化率（半弾力性）として解釈します。
+
+$$|\hat\beta_\text{entry}| - |\hat\beta_\text{exit}| = 0.294 \quad (p = 0.013)$$
+
+**$|\beta_\text{entry}| > |\beta_\text{exit}|$**、すなわち**参入減少の幅が退出増加の幅より 0.294（対数ポイント）大きい**ことを示します。$p$ 値 0.013 より、この非対称性は 5% 水準で統計的に有意です。
+
+---
+
+### 経済的な含意
+
+| マージン | 方向 | 効果の大きさ（対数スケール） |
+|---|---|---|
+| 退出（既存法人の撤退） | 増加（+） | $|\beta_\text{exit}|$ |
+| 参入（新規法人の設立） | 減少（−） | $|\beta_\text{entry}| = |\beta_\text{exit}| + \mathbf{0.294}$ |
+
+ブレグジット国民投票は、**既存の現地法人を英国から引き揚げさせるよりも、新規投資を抑制する効果の方が比例的に大きかった**ことを意味します。
+
+---
+
+### なぜ非対称になるか：直感的な説明
+
+- **退出（exit）** は既存法人の意思決定であり、撤退コスト（サンクコスト、雇用・取引関係の解消）がブレーキとなるため、不確実性が高まっても即座には動きにくい。
+- **参入（entry）** は将来の収益期待に基づく判断であり、英国の EU 離脱による市場アクセスや規制の不確実性が高まると、**まだ投資していない企業は「様子見」を選択しやすい**。
+
+したがって、投資家は既存拠点を維持しながら新規参入を手控えるという非対称な反応を示したと解釈できます。これはブレグジットの不確実性（Bloom 2009 のリアルオプション効果）と整合的です。
+
+---
+
+### 注意点
+
+- 係数は対数スケールなので、0.294 は「参入減少が退出増加より約 $e^{0.294} - 1 \approx 34\%$ 大きい」という意味では**ありません**。あくまで対数ポイントの差です。
+- $\beta_\text{exit} > 0$・$\beta_\text{entry} < 0$ の符号が事前の想定通りであることを確認した上でこの解釈が成立します。推定後に `beta_exit` と `beta_entry` の実際の値を確認することを推奨します。
+
+## LaTeX出力
+
+```{r export-latex}
+options(modelsummary_stars_note = FALSE)
+
+entry_exit_diff_label_tex <- "$\\left|\\textrm{New Entry DiD}\\right| - \\left|\\textrm{Exit DiD}\\right|$"
+entry_exit_diff_label_note <- "ENTRY_EXIT_DIFF_LABEL"
+opposite_signs_note <- "exit DiD GT_ZERO, entry DiD LT_ZERO"
+
+note_text <- paste(
+  "Notes: Standard errors clustered by host country are reported in parentheses.",
+  "The estimates use country-industry-survey-year outcomes.",
+  "The dependent variables are the total number of Japanese affiliates, the number of exits, and the number of new entries, respectively.",
+  "All models are estimated using Poisson Pseudo Maximum Likelihood (PPML).",
+  sprintf("The row %s reports the difference in absolute values of the new-entry and exit DiD coefficients, computed via the delta method from a stacked PPML model with margin-by-treatment interactions (assuming opposite signs: %s); its p-value tests equality of the absolute magnitudes.", entry_exit_diff_label_note, opposite_signs_note),
+  "The comparison group consists of 11 high-income EU countries (AUT, BEL, DNK, FIN, FRA, DEU, IRL, ITA, LUX, NLD, SWE).",
+  "* p < 0.05, ** p < 0.01, *** p < 0.001."
+)
+
+star_fun <- function(p) {
+  case_when(p < 0.001 ~ "***", p < 0.01 ~ "**", p < 0.05 ~ "*", TRUE ~ "")
+}
+
+entry_exit_diff_row <- data.frame(
+  term            = entry_exit_diff_label_tex,
+  "Total Affiliates" = "",
+  "Exits"         = "",
+  "New Entry"     = sprintf("%.3f%s", entry_exit_diff_coef, star_fun(entry_exit_diff_p)),
+  check.names = FALSE
+)
+
+entry_exit_diff_se_row <- data.frame(
+  term            = "",
+  "Total Affiliates" = "",
+  "Exits"         = "",
+  "New Entry"     = sprintf("(%.3f)", entry_exit_diff_se),
+  check.names = FALSE
+)
+
+entry_exit_diff_p_row <- data.frame(
+  term            = "Equality test p-value",
+  "Total Affiliates" = "",
+  "Exits"         = "",
+  "New Entry"     = if_else(entry_exit_diff_p < 0.001, "$<0.001$",
+                            sprintf("%.3f", entry_exit_diff_p)),
+  check.names = FALSE
+)
+
+pseudo_r2_row <- data.frame(
+  term            = "Pseudo R-squared",
+  "Total Affiliates" = sprintf("%.3f", as.numeric(fixest::fitstat(res_aff_industry,   "pr2"))),
+  "Exits"         = sprintf("%.3f", as.numeric(fixest::fitstat(res_exit_industry,  "pr2"))),
+  "New Entry"     = sprintf("%.3f", as.numeric(fixest::fitstat(res_entry_industry, "pr2"))),
+  check.names = FALSE
+)
+
+modelsummary(models_industry,
+             output = "../../04_tex/main/Tab1.tex",
+             fmt = 3,
+             stars = c("*" = 0.05, "**" = 0.01, "***" = 0.001),
+             title = "Impact of Brexit Referendum on Japanese FDI (2x2 DiD)\\label{tab:2x2did_aggregate}",
+             coef_map = cm,
+             gof_omit = "Log.Lik.|Pseudo.R2|AIC|BIC|RMSE|Std.Errors|R2",
+             add_rows = rbind(entry_exit_diff_row, entry_exit_diff_se_row,
+                              entry_exit_diff_p_row, pseudo_r2_row),
+             notes = note_text,
+             escape = FALSE,
+             booktabs = TRUE,
+             threeparttable = TRUE)
+
+tab1_tex <- readLines("../../04_tex/main/Tab1.tex", warn = FALSE)
+latex_replace_fixed <- function(x, pattern, replacement) {
+  vapply(strsplit(x, pattern, fixed = TRUE), paste, collapse = replacement,
+         FUN.VALUE = character(1), USE.NAMES = FALSE)
+}
+tab1_tex <- gsub("\\\\begin\\{table\\}", "\\\\begin{table}[!ht]", tab1_tex)
+tab1_tex <- gsub("\\\\label\\{tab:export_latex\\}", "", tab1_tex)
+tab1_tex <- gsub("\\\\num\\{([^}]*)\\}", "\\1", tab1_tex)
+tab1_tex <- gsub("\\\\begin\\{tablenotes\\}", "", tab1_tex)
+tab1_tex <- gsub("^\\\\item Notes: ", "\\\\end{threeparttable}\\\\par\\\\medskip\n\\\\parbox{\\\\linewidth}{\\\\footnotesize Notes: ", tab1_tex)
+tab1_tex <- gsub("^\\\\end\\{tablenotes\\}$", "}", tab1_tex)
+tab1_tex <- gsub("^\\\\end\\{threeparttable\\}$", "", tab1_tex)
+tab1_tex <- latex_replace_fixed(tab1_tex, entry_exit_diff_label_note, entry_exit_diff_label_tex)
+tab1_tex <- latex_replace_fixed(tab1_tex, "exit DiD GT_ZERO", "exit DiD $>$ 0")
+tab1_tex <- latex_replace_fixed(tab1_tex, "entry DiD LT_ZERO", "entry DiD $<$ 0")
+writeLines(tab1_tex, "../../04_tex/main/Tab1.tex")
+```

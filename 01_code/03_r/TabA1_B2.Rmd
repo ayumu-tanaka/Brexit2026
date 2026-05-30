@@ -1,0 +1,197 @@
+---
+title: "記述統計と国リスト"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+  pdf_document:
+    toc: true
+    keep_tex: true
+---
+
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+options(tinytex.install_packages = TRUE)
+```
+
+# パッケージの読み込み
+
+```{r load-package}
+library(tidyverse)
+```
+
+
+# データの読み込み
+```{r data}
+aff_eu <- rio::import("../../03_data_output/Affiliate/affiliate_panel_brexit_eu_sample.dta")
+
+# 2010年から2020年に限定
+aff_eu <- filter(aff_eu, year >= 2010 & year <= 2020)
+
+```
+
+# 変数の整形
+```{r preparation}
+
+# 産業分類の整理
+aff_eu$Sector <- aff_eu$FA_SectorClassNameAlph
+aff_eu$Sector[aff_eu$FA_SectorClassNameAlph=="Agriculture,Mining"] <- "Agriculture & Mining"
+aff_eu$Sector[aff_eu$FA_SectorClassNameAlph=="HeadQuarter"] <- "Services"
+aff_eu$Sector[aff_eu$FA_SectorClassNameAlph=="Retail"] <- "Services"
+aff_eu$Sector[aff_eu$FA_SectorClassNameAlph=="Service,Others"] <- "Services"
+aff_eu$Sector[aff_eu$FA_SectorClassNameAlph=="Wholesale"] <- "Services"
+aff_eu$Sector[aff_eu$FA_SectorClassNameAlph=="Manufacturing"] <- "Manufacturing"
+
+# 国名を付与
+aff_eu$countryname <- countrycode::countrycode(
+  aff_eu$country,
+  origin = 'iso3c', 
+  destination = "country.name"
+)
+
+# 表示用ラベルを整える
+aff_eu$exitit <- ifelse(aff_eu$exit==1, "Exit", "Survive")
+
+
+aff_eu2 <- aff_eu[, c("exitit", "GBR", "highEU", "Sector", "Aff_size", "N_Aff_EU", "countryname", "year", "Ratio")]
+
+aff_eu2$GBR[aff_eu2$GBR==1] <- "a. UK"
+aff_eu2$GBR[aff_eu2$GBR==0] <- "b. Other EU"
+
+aff_eu2$highEU[aff_eu2$highEU==1] <- "High-income EU"
+aff_eu2$highEU[aff_eu2$highEU==0] <- "Other EU"
+
+```
+
+
+```{r}
+
+
+# 列名を整える
+
+aff_eu2 <- aff_eu2 %>% 
+  select(`High-income EU` = highEU,
+         `Number of affiliates in EU` = N_Aff_EU,
+         `Country name` = countryname,
+         `Affiliate size` = Aff_size,
+         `Exit dummy` = exitit,
+         `Japanese ownership ratio` =  Ratio,
+         `Sector` = Sector,
+         `Year` = year,
+         `UK` = GBR
+         )
+
+```
+
+
+
+
+
+
+
+# 表A1: 国リスト
+
+```{r country-list}
+library(kableExtra)
+
+country_tab <- aff_eu2 %>%
+  mutate(`Income group` = ifelse(`High-income EU` == "High-income EU",
+                                 "High-income EU",
+                                 "Middle-income EU")) %>%
+  group_by(`Country name`, `Income group`) %>%
+  summarise(`N of observations` = n(), .groups = "drop") %>%
+  mutate(`N of affiliates` = `N of observations` / 8L)
+
+high_tab <- country_tab %>%
+  filter(`Income group` == "High-income EU") %>%
+  select(Country = `Country name`, `N of observations`, `N of affiliates`) %>%
+  mutate(across(everything(), as.character))
+
+middle_tab <- country_tab %>%
+  filter(`Income group` == "Middle-income EU") %>%
+  select(Country = `Country name`, `N of observations`, `N of affiliates`) %>%
+  mutate(across(everything(), as.character))
+
+if (nrow(high_tab) > nrow(middle_tab)) {
+  middle_tab[(nrow(middle_tab) + 1):nrow(high_tab), ] <- ""
+}
+if (nrow(middle_tab) > nrow(high_tab)) {
+  high_tab[(nrow(high_tab) + 1):nrow(middle_tab), ] <- ""
+}
+
+country_wide <- bind_cols(high_tab, middle_tab)
+
+colnames(country_wide) <- c("Country", "N of observations", "N of affiliates",
+                            "Country", "N of observations", "N of affiliates")
+
+note_country <- paste(
+  "This table shows the number of observations ($=$ the number of affiliates in 2010 $\\\\times$ eight years) by the host country.",
+  "The sample includes the Japanese affiliates in the EU.",
+  "Sample restricted to affiliates with $>10$\\\\% Japanese ownership."
+)
+
+kbl(country_wide,
+    format = "latex",
+    booktabs = FALSE,
+    caption = "Country list.",
+    label = "tab:country-list",
+    align = "llllll",
+    escape = FALSE,
+    linesep = "") |>
+  add_header_above(c("High-income EU" = 3, "Middle-income EU" = 3),
+                   bold = FALSE, escape = FALSE) |>
+  kable_styling(latex_options = c("hold_position")) |>
+  footnote(general = note_country,
+           threeparttable = TRUE,
+           escape = FALSE) |>
+  save_kable("../../04_tex/main/TabA1.tex")
+
+tab_a1 <- readLines("../../04_tex/main/TabA1.tex")
+tab_a1 <- gsub("\\\\caption\\{\\\\label\\{tab:tab:country-list\\}", "\\\\caption{\\\\label{tab:country-list}", tab_a1)
+tab_a1 <- gsub("\\\\begin\\{table\\}\\[!h\\]", "\\\\begin{table}[!ht]", tab_a1)
+tab_a1 <- gsub("\\\\begin\\{tabular\\}\\[t\\]\\{l\\|l\\|l\\|l\\|l\\|l\\}", "\\\\begin{tabular}[t]{llllll}", tab_a1)
+tab_a1 <- gsub("\\\\multicolumn\\{3\\}\\{c\\|\\}\\{High-income EU\\}", "\\\\multicolumn{3}{c}{High-income EU}", tab_a1)
+writeLines(tab_a1, "../../04_tex/main/TabA1.tex")
+
+```
+
+
+# 表B2: 記述統計
+
+```{r descriptive-statistics}
+
+# `Country name` を除外
+aff_eu2$`Country name` <- NULL
+
+
+caption <- 'Descriptive statistics. \\label{tab:desc}'
+longnote <- "This table shows the descriptive statistics of the estimation sample. The sample includes the Japanese affiliates in the EU. The variable ``Number of affiliates in EU'' is the number of affiliates in the EU. The variable ``Affiliate size'' is the size of the affiliate. The variable ``High-income EU'' is a dummy variable that takes 1 if the affiliate is located in the high-income EU countries. The variable ``Exit'' is a dummy variable that takes 1 if the affiliate exits the host country. The variable ``Sector'' is the sector of the affiliate."
+
+library(modelsummary)
+
+tab_b2 <- datasummary_balance(
+  ~ UK,
+  data = aff_eu2,
+  title = caption,
+  notes = longnote,
+  output = "latex"
+)
+
+tab_b2 <- sub(
+  "\\textbackslash{}label\\{tab:desc\\}",
+  "\\label{tab:desc}",
+  tab_b2,
+  fixed = TRUE
+)
+
+tab_b2 <- sub("\\\\begin\\{table\\}", "\\\\begin{table}[!ht]", tab_b2)
+
+writeLines(tab_b2, "../../04_tex/main/TabB2.tex")
+```

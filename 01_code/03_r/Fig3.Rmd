@@ -1,0 +1,142 @@
+---
+title: "英国向け退出・新規参入の記述図"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,      # コードを表示する
+  cache = FALSE,    # キャッシュは使わない
+  message = FALSE,  # パッケージ読込時などのメッセージを表示しない
+  warning = FALSE   # 警告メッセージを表示しない
+)
+```
+
+# パッケージの読み込み
+
+```{r packages}
+library(rio)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+# データの読み込み
+
+産業×国×年レベルの参入・退出・現地法人総数データ（Data14 産出）を読み込み、
+国×年レベルに集計する。
+
+```{r load-data}
+# 高所得EU諸国のリスト（対照群と英国）
+EU_HI <- c("AUT", "BEL", "DNK", "FIN", "FRA", "DEU", "IRL", "ITA", "LUX", "NLD", "SWE", "GBR")
+
+# 産業×国×年パネルを読み込み、国×年に集計
+entry_exit_country <- rio::import("../../03_data_output/EntryExit/N_affiliate_entry_exit.dta") %>%
+  filter(year >= 2010, year <= 2020) %>%
+  group_by(iso, year) %>%
+  summarise(
+    N_entry = sum(N_entry_industry, na.rm = TRUE),
+    N_exit  = sum(N_exit_industry,  na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    UK             = as.integer(iso == "GBR"),
+    high_income_EU = as.integer(iso %in% EU_HI)
+  )
+```
+
+# 図作成用の整形
+
+```{r prepare-data}
+prepare_high_income_eu_comparison <- function(data, outcome) {
+  data %>%
+    filter(high_income_EU == 1) %>%
+    group_by(year, UK) %>%
+    summarise(
+      N.mean = mean(.data[[outcome]], na.rm = TRUE),
+      N.sd = sd(.data[[outcome]], na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      N.sd = ifelse(UK == 1 | is.na(N.sd), 0, N.sd),
+      Group = ifelse(UK == 1, "GBR", "High-income EU countries")
+    )
+}
+
+exit_compare <- prepare_high_income_eu_comparison(entry_exit_country, "N_exit")
+entry_compare <- prepare_high_income_eu_comparison(entry_exit_country, "N_entry")
+```
+
+# 図3a: 英国と高所得EUの退出件数比較
+
+```{r fig3a-plot, dpi=300}
+fig3a <- ggplot(data = subset(exit_compare, UK == 0),
+                aes(x = year, y = N.mean, color = Group)) +
+  geom_line(linetype = "dotted") +
+  geom_point() +
+  geom_ribbon(
+    aes(ymin = N.mean - 1.96 * N.sd, ymax = N.mean + 1.96 * N.sd, fill = Group),
+    alpha = 0.2,
+    linetype = "dotted"
+  ) +
+  geom_line(data = subset(exit_compare, UK == 1), linetype = "solid", colour = "black") +
+  geom_point(data = subset(exit_compare, UK == 1), colour = "black") +
+  geom_text(data = subset(exit_compare, UK == 1), aes(label = N.mean), nudge_y = 7, colour = "black") +
+  geom_vline(xintercept = 2016, linetype = "dotted") +
+  annotate("text", x = 2016, y = 85, label = "Brexit referendum", colour = "blue") +
+  annotate("text", x = 2013, y = 80, label = "UK", colour = "black") +
+  annotate("text", x = 2013, y = 0, label = "High-income EU countries", colour = "red") +
+  labs(
+    title = "Number of exiting Japanese affiliates",
+    x = "Year",
+    y = "Number of exiting affiliates",
+    caption = "Solid line: UK. Dotted line: High-income EU countries."
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none", plot.caption = element_text(hjust = 0, size = 8)) +
+  scale_x_continuous(limits = c(2010, 2020), breaks = seq(2010, 2020, by = 2))
+
+fig3a
+
+ggsave("../../04_tex/main/Fig3a.eps", fig3a, dpi = 300)
+```
+
+# 図3b: 英国と高所得EUの新規参入件数比較
+
+```{r fig3b-plot, dpi=300}
+fig3b <- ggplot(data = subset(entry_compare, UK == 0),
+                aes(x = year, y = N.mean, color = Group)) +
+  geom_line(linetype = "dotted") +
+  geom_point() +
+  geom_ribbon(
+    aes(ymin = N.mean - 1.96 * N.sd, ymax = N.mean + 1.96 * N.sd, fill = Group),
+    alpha = 0.2,
+    linetype = "dotted"
+  ) +
+  geom_line(data = subset(entry_compare, UK == 1), linetype = "solid", colour = "black") +
+  geom_point(data = subset(entry_compare, UK == 1), colour = "black") +
+  geom_text(data = subset(entry_compare, UK == 1), aes(label = N.mean), nudge_y = 3.5, colour = "black") +
+  geom_vline(xintercept = 2016, linetype = "dotted") +
+  annotate("text", x = 2017, y = 75, label = "Brexit referendum", colour = "blue") +
+  annotate("text", x = 2011, y = 70, label = "UK", colour = "black") +
+  annotate("text", x = 2014, y = 0, label = "High-income EU countries", colour = "red") +
+  labs(
+    title = "Number of new affiliates",
+    x = "Year",
+    y = "Number of new affiliates",
+    caption = "Solid line: UK. Dotted line: High-income EU countries."
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none", plot.caption = element_text(hjust = 0, size = 8)) +
+  scale_x_continuous(limits = c(2010, 2020), breaks = seq(2010, 2020, by = 2))
+
+fig3b
+
+ggsave("../../04_tex/main/Fig3b.eps", fig3b, dpi = 300)
+```

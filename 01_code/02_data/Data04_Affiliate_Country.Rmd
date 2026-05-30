@@ -1,0 +1,218 @@
+---
+title: "子会社データと国レベルデータの接続"
+author: "Ayumu Tanaka"
+date: "2024-05-18"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # Display codes
+                      cache = FALSE, # do not Cache the results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+# 準備
+
+
+```{r preparation}
+# ワークスペースの初期化
+rm(list = ls())
+
+# 必要なパッケージの読み込み
+library("rio")           # For importing data 
+library("tidyverse")     # For data manipulation
+library("countrycode")   # For creating the country ISO codes
+library("Hmisc")         # For labeling the variables
+```
+
+
+
+
+# データの読み込み
+
+
+以下のデータを読み込む。
+
+- "FA2": 日本の海外子会社の基本データ
+
+```{r load-data}
+
+FA2 <- import("../../03_data_output/Affiliate/affiliate_panel_with_sector_codes.dta")
+```
+
+
+
+
+# ISO国コードの整備
+
+Creating the country ISO codes using `countrycode` package for the affiliate data "FA2"
+
+`countrycode` パッケージが本国コードに吸収してしまう以下の3地域については、`NationCode` を用いて iso コード・英語国名を手動で補正する。
+
+| NationCode | NationName | iso | NationNameAlph | countryname |
+|---:|---|---|---|---|
+| 228 | セルビア・モンテネグロ | SCG | Serbia and Montenegro | Serbia and Montenegro |
+| 326 | アンティール | ANT | Netherlands Antilles | Netherlands Antilles |
+| 902 | サイパン | MNP | Northern Mariana Islands | Northern Mariana Islands |
+
+
+```{r countrycode}
+
+# Replace countrynames
+# Example) Replace "Estoniya" with "Republic of Estonia" with gsub()
+FA2$NationNameAlph = gsub("Estoniya", "Republic of Estonia", FA2$NationNameAlph)
+FA2$NationNameAlph = gsub("Latviya", "Republic of Latvia", FA2$NationNameAlph)
+FA2$NationNameAlph = gsub("Lebanese Republic", "Republic of Lebanon", FA2$NationNameAlph)
+FA2$NationNameAlph = gsub("Portuguese Republic", "Portugal", FA2$NationNameAlph)
+FA2$NationNameAlph = gsub("Republic of Cote D'ivire", "Ivory Coast", FA2$NationNameAlph)
+FA2$NationNameAlph = gsub("Slovenija", "Slovenia", FA2$NationNameAlph)
+FA2$NationNameAlph = gsub("New Yugoslavia", "Yugoslavia", FA2$NationNameAlph) # Former Yugoslavia
+FA2$NationNameAlph = gsub("Serbia and Montenegro", "Yugoslavia", FA2$NationNameAlph) # Former Yugoslavia (NationCode=228 は後でSCGを上書き)
+FA2$NationNameAlph = gsub("Socialist Federal Republic of Yugoslavia", "Yugoslavia", FA2$NationNameAlph) # Former Yugoslavia
+FA2$NationNameAlph = gsub("Socialist Federal Republic of Yugoslavia", "Yugoslavia", FA2$NationNameAlph) # Former Yugoslavia
+FA2$NationNameAlph = gsub("Netherlands Antilles", "Netherlands", FA2$NationNameAlph)
+FA2$NationNameAlph = gsub("Saipan", "United States", FA2$NationNameAlph)
+FA2$NationNameAlph = gsub("The Cooperative Republic of Guyana", "Guyana", FA2$NationNameAlph)
+FA2$NationNameAlph = gsub("Republic of Namibia", "Namibia", FA2$NationNameAlph)
+
+
+# 日本向けのISO国コードを作成
+  FA2 <- FA2 %>%
+    mutate(iso = countrycode(NationNameAlph, origin = "country.name", destination = "iso3c"))
+
+# iso コードの手動付与
+# countrycode パッケージが本国コードに吸収してしまう3地域を NationCode で上書き
+  FA2$iso[FA2$NationCode == 228] <- "SCG"  # セルビア・モンテネグロ（Yugoslavia に変換済）
+  FA2$iso[FA2$NationCode == 326] <- "ANT"  # オランダ領アンティル（Netherlands に変換済）
+  FA2$iso[FA2$NationCode == 902] <- "MNP"  # サイパン／北マリアナ諸島（United States に変換済）
+
+# NationNameAlph の訂正（gsub で本国名に上書きされた3地域を正式英語名に戻す）
+  FA2$NationNameAlph[FA2$NationCode == 228] <- "Serbia and Montenegro"
+  FA2$NationNameAlph[FA2$NationCode == 326] <- "Netherlands Antilles"
+  FA2$NationNameAlph[FA2$NationCode == 902] <- "Northern Mariana Islands"
+
+# Move the column "iso" after the column NationNameAlph
+  FA2 <- FA2 %>%
+    select(NationNameAlph, iso, everything())
+
+# `countrycode` で国名を付与
+  FA2 <- FA2 %>%
+    mutate(countryname = countrycode(iso, origin = "iso3c", destination = "country.name"))
+
+# countryname の訂正（ANT・SCG は countrycode の対応外のため手動で補正）
+  FA2$countryname[FA2$NationCode == 228] <- "Serbia and Montenegro"
+  FA2$countryname[FA2$NationCode == 326] <- "Netherlands Antilles"
+  FA2$countryname[FA2$NationCode == 902] <- "Northern Mariana Islands"
+
+```
+
+# EUダミーの付与
+
+Merging the EU dummy data with the affiliate data "FA2"
+
+```{r EU-dummy}
+# EUダミーデータの読み込み
+  EU <- import("../../02_data_input/eu.dta")
+
+# `euall` の欠損を 0 として扱う
+  EU$euall <- 1
+  
+# Label the column "euall" as "Former/current EU members"
+  label(EU$euall) <- "Former/current EU members"
+
+# Merge the EU dummy data with the affiliate data
+  FA2 <- left_join(FA2, EU %>% select(iso_code, year, eu, euall), 
+                                by = c("iso" = "iso_code", "year" = "year"))
+  
+# Replace the column "eu" if it is NA with 0
+  FA2$eu[is.na(FA2$eu)] <- 0
+
+# Replace the column "euall" if it is NA with 0
+  FA2$euall[is.na(FA2$euall)] <- 0
+  
+# Move the columns "eu" and "europe" after the column "iso"
+  FA2 <- FA2 %>% 
+    select(iso, year, eu, euall, everything())
+
+```
+
+# WDI
+Combine the FA2 data with the WDI data
+
+```{r combine-WDI}
+# WDIデータの読み込み
+library(rio)
+  WDI <- import("../../02_data_input/WDI.rds")
+# Select the necessary columns
+  WDI <- WDI %>% 
+    select(iso3c, year, GDP_PPP, GDP_per_capita)
+# Merge the WDI data with the affiliate data
+  FA2 <- left_join(FA2, WDI, 
+                   by = c("iso" = "iso3c", "year" = "year"))
+
+```
+
+
+# 距離データの付与
+
+Combine the FA2 data with the distance data from the CEPII's Gravity database
+
+```{r combine-CEPII}
+# CEPII距離データの読み込み
+  distance <- import("../../02_data_input/distance.dta")
+# 日本発の距離データだけ残す
+  distance <- distance %>% 
+    filter(iso3_o=="JPN")
+# Select the necessary columns
+  distance <- distance %>% 
+    select(iso3_d, dist)
+# Merge the distance data with the affiliate data
+  FA2 <- left_join(FA2, distance,
+                   by = c("iso" = "iso3_d"))
+```
+
+
+# 重複の削除
+
+```{r}
+# `AffiliateCode` と `year` の重複を削除
+FA2 <- FA2 %>%
+  group_by(AffiliateCode, year) %>%
+  slice(1) %>%
+  ungroup()
+```
+
+
+
+# データの保存
+
+```{r export-data}
+rio::export(FA2, "../../03_data_output/Affiliate/affiliate_panel_with_country_covariates.dta")
+```
+
+
+# 国コード対応表の保存
+
+Stataコード相当:
+```
+keep iso NationCode NationName NationNameAlph countryname
+duplicates drop iso NationCode countryname, force
+```
+
+**注意**: NationCode=902（サイパン）と NationCode=623（北マリアナ連邦）は同一の地域（Commonwealth of the Northern Mariana Islands）だが、元データでは異なる NationCode が付与されている。両者とも iso=MNP が割り当てられるため、対応表には2行として残る。
+
+```{r export-countrycode}
+countrycode_NationCode <- FA2 %>%
+  select(iso, NationCode, NationName, NationNameAlph, countryname) %>%
+  distinct(iso, NationCode, countryname, .keep_all = TRUE)
+
+rio::export(countrycode_NationCode, "../../03_data_output/countrycode_NationCode.dta")
+```
+
+

@@ -1,0 +1,158 @@
+---
+title: "Feasibility Check for Mutually Exclusive Entry and Exit Samples"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+# Purpose
+
+This temporary note checks whether we can construct entry and exit analyses based on
+mutually exclusive samples, as suggested by the referee.
+
+The proposed logic is:
+
+- Exit sample: affiliates already present in 2010
+- Entry sample: affiliates not present in 2010 and first observed after 2010
+
+If this construction is feasible, the entry-side estimate can be interpreted as the
+response of "new" affiliates after 2010, which is more directly comparable to the exit
+analysis.
+
+# Packages
+
+```{r packages}
+library(rio)
+library(dplyr)
+library(tidyr)
+library(fixest)
+library(knitr)
+```
+
+# Load affiliate-level panel
+
+```{r load-data}
+aff <- import("../../03_data_output/affiliate_panel_survival_ready.dta") %>%
+  filter(year >= 2010, year <= 2020)
+
+names(aff)[names(aff) == "iso"] <- "country"
+```
+
+# Construct mutually exclusive samples
+
+```{r define-samples}
+affiliate_timing <- aff %>%
+  group_by(AffiliateCode) %>%
+  summarise(
+    first_observed_year = min(year, na.rm = TRUE),
+    first_country = first(country),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    exit_sample = first_observed_year == 2010,
+    entry_sample = first_observed_year > 2010
+  )
+
+table(affiliate_timing$first_observed_year)
+```
+
+```{r sample-size}
+sample_summary <- affiliate_timing %>%
+  summarise(
+    affiliates_total = n(),
+    affiliates_exit_sample = sum(exit_sample),
+    affiliates_entry_sample = sum(entry_sample)
+  )
+
+sample_summary %>% kable()
+```
+
+# Entry sample by first observed year and country
+
+```{r entry-distribution}
+entry_distribution <- affiliate_timing %>%
+  filter(entry_sample) %>%
+  count(first_observed_year, first_country, sort = TRUE)
+
+entry_distribution %>%
+  group_by(first_observed_year) %>%
+  summarise(new_affiliates = sum(n), .groups = "drop") %>%
+  kable()
+```
+
+# Build a country-year panel for "new affiliates after 2010"
+
+```{r build-country-year-entry}
+entry_country_year <- affiliate_timing %>%
+  filter(entry_sample) %>%
+  count(first_country, first_observed_year, name = "new_affiliates") %>%
+  rename(country = first_country, year = first_observed_year)
+
+all_country_year <- expand_grid(
+  country = sort(unique(aff$country)),
+  year = sort(unique(aff$year))
+) %>%
+  left_join(entry_country_year, by = c("country", "year")) %>%
+  mutate(
+    new_affiliates = replace_na(new_affiliates, 0L),
+    GBR = if_else(country == "GBR", 1L, 0L),
+    Brexit = if_else(country == "GBR" & year >= 2016, 1L, 0L)
+  )
+
+all_country_year %>%
+  group_by(country) %>%
+  summarise(total_new_affiliates = sum(new_affiliates), .groups = "drop") %>%
+  arrange(desc(total_new_affiliates)) %>%
+  head(15) %>%
+  kable()
+```
+
+# Simple event-study feasibility check
+
+```{r twfe-country-year}
+entry_twfe <- feols(
+  new_affiliates ~ i(year, GBR, 2014) | country + year,
+  data = all_country_year,
+  vcov = ~country
+)
+
+etable(entry_twfe)
+```
+
+# Interpretation
+
+```{r interpretation-table}
+entry_event_table <- as.data.frame(coeftable(entry_twfe))
+entry_event_table$term <- rownames(entry_event_table)
+rownames(entry_event_table) <- NULL
+
+entry_event_table %>%
+  filter(grepl("^year::[0-9]{4}:GBR$", term)) %>%
+  mutate(event_year = sub("^year::", "", term),
+         event_year = sub(":GBR$", "", event_year)) %>%
+  select(event_year, Estimate, `Std. Error`, `Pr(>|t|)`) %>%
+  kable()
+```
+
+# Assessment
+
+This construction is feasible if:
+
+- the complement of the 2010 affiliate stock produces a sizable number of "new" affiliates,
+- the resulting entry panel has enough variation by country and year,
+- and the coefficient can be interpreted as changes in new affiliate appearance after 2010.
+
+This construction is imperfect if:
+
+- the first observed year is not the true year of establishment,
+- affiliate identifiers change over time,
+- or the affiliate-level complement does not map cleanly into the country-industry entry setup used in the main paper.

@@ -1,0 +1,419 @@
+---
+title: "Appendix F. Affiliate-Level Exit Responses by Parent-Level UK Exposure"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+# Purpose
+
+This temporary note examines whether affiliate-level exit responses to the
+Brexit referendum were larger for affiliates whose parent firms were more
+exposed to the UK before the referendum.
+
+The key idea is to construct a parent-level measure of UK importance using
+pre-referendum information from 2010, assign affiliates to high- and
+low-exposure parent groups, and then compare affiliate-level exit responses
+across those parent-level exposure groups.
+
+# Caveat
+
+The baseline high-income EU sample contains only a small number of distinct
+Japanese parent firms. This means that any heterogeneity result based on parent
+exposure should be interpreted cautiously.
+
+```{r packages}
+# データ入出力に使うパッケージを読み込む
+library(rio)
+# データ加工に使うパッケージを読み込む
+library(dplyr)
+# 整形補助に使うパッケージを読み込む
+library(tidyr)
+# TWFE 推定に使うパッケージを読み込む
+library(fixest)
+# 表示用の簡易表を作るパッケージを読み込む
+library(knitr)
+```
+
+# Parent-level UK exposure in 2010
+
+```{r parent-exposure}
+# 親子関係を含む affiliate-level パネルデータを読み込む
+parent_panel <- import("../../03_data_output/Affiliate/affiliate_panel_with_parent_links.dta") %>%
+  # UK 依存度を事前値で定義するため 2010 年の観測だけに絞る
+  filter(year == 2010)
+
+# 2010 年時点での親企業ごとの UK 依存度指標を作る
+parent_exposure_2010 <- parent_panel %>%
+  # 親企業単位で集計する
+  group_by(JPCode) %>%
+  summarise(
+    # 2010 年の全海外 affiliate 数を数える
+    total_affiliates_2010 = n_distinct(AffiliateCode),
+    # 2010 年の英国 affiliate 数を数える
+    uk_affiliates_2010 = n_distinct(AffiliateCode[iso == "GBR"]),
+    # 2010 年の全海外 affiliate 雇用を合計する
+    total_employment_2010 = sum(PayrollNumber, na.rm = TRUE),
+    # 2010 年の英国 affiliate 雇用を合計する
+    uk_employment_2010 = sum(PayrollNumber[iso == "GBR"], na.rm = TRUE),
+    # affiliate 数ベースの英国依存度を作る
+    uk_affiliate_share_2010 = uk_affiliates_2010 / total_affiliates_2010,
+    # 雇用ベースの英国依存度を作る
+    uk_employment_share_2010 = ifelse(
+      total_employment_2010 > 0,
+      uk_employment_2010 / total_employment_2010,
+      NA_real_
+    ),
+    # 英国 affiliate を 1 つでも持つかどうかのダミーを作る
+    any_uk_presence_2010 = uk_affiliates_2010 > 0,
+    # 集計後はグループ化を解除する
+    .groups = "drop"
+  )
+
+# 作成した親企業別の UK 依存度指標を表示する
+parent_exposure_2010
+```
+
+# Baseline exit sample
+
+```{r exit-sample}
+# baseline の high-income EU exit sample を読み込む
+exit_sample <- import("../../03_data_output/Affiliate/affiliate_panel_brexit_high_income_eu_sample.dta") %>%
+  # 本文と同じ 2010-2020 年の分析期間にそろえる
+  filter(year >= 2010, year <= 2020) %>%
+  # 親会社 ID の JPCode を使って UK 依存度指標を exit sample に結合する
+  left_join(parent_exposure_2010, by = "JPCode")
+
+# exit sample の affiliate 数・親企業数などを確認する
+exit_sample %>%
+  summarise(
+    # 分析対象 affiliate 数を数える
+    affiliates = n_distinct(AffiliateCode),
+    # 分析対象親企業数を数える
+    parents = n_distinct(JPCode),
+    # 2010 年時点で英国 affiliate を持つ親企業数を数える
+    parents_with_uk_presence = n_distinct(JPCode[any_uk_presence_2010]),
+    # 親企業別 UK 依存度の中央値を確認する
+    median_uk_affiliate_share = median(uk_affiliate_share_2010, na.rm = TRUE)
+  )
+```
+
+# Exposure groups
+
+```{r exposure-groups}
+# 英国 affiliate を持つ親企業だけで依存度の中央値を計算する
+median_positive_share <- exit_sample %>%
+  # UK affiliate を持つ親企業だけに限定する
+  filter(any_uk_presence_2010) %>%
+  # 親企業ごとに 1 行にして share を取り出す
+  distinct(JPCode, uk_affiliate_share_2010) %>%
+  # 正の share の中央値を計算する
+  summarise(median_share = median(uk_affiliate_share_2010, na.rm = TRUE)) %>%
+  # ベクトルとして取り出す
+  pull(median_share)
+
+# 中央値を使って親企業を high / low / none に分ける
+exit_sample <- exit_sample %>%
+  mutate(
+    # 親企業の UK 依存度グループを作る
+    parent_uk_exposure_group = case_when(
+      !any_uk_presence_2010 ~ "No UK exposure",
+      uk_affiliate_share_2010 >= median_positive_share ~ "High UK exposure",
+      uk_affiliate_share_2010 < median_positive_share ~ "Low UK exposure",
+      TRUE ~ NA_character_
+    )
+  )
+
+```
+
+# Sample composition
+
+```{r sample-composition}
+# exposure group ごとのサンプル構成を集計して表にする
+sample_composition <- exit_sample %>%
+  # exposure group ごとに集計する
+  group_by(parent_uk_exposure_group) %>%
+  summarise(
+    # 親企業数を数える
+    parents = n_distinct(JPCode),
+    # affiliate 数を数える
+    affiliates = n_distinct(AffiliateCode),
+    # 観測数を数える
+    observations = n(),
+    # 集計後はグループ化を解除する
+    .groups = "drop"
+  )
+
+# レポート内で見やすい表として表示する
+sample_composition %>%
+  # レポート内で見やすい表として表示する
+  kable(caption = "Composition of the baseline exit sample by parent-level UK exposure")
+```
+
+# Summary for the paper
+
+```{r paper-summary-values, include=FALSE}
+# 論文本文にそのまま移しやすいように中央値とサンプル構成を文章で整理する
+high_parents <- sample_composition %>%
+  filter(parent_uk_exposure_group == "High UK exposure") %>%
+  pull(parents)
+
+high_affiliates <- sample_composition %>%
+  filter(parent_uk_exposure_group == "High UK exposure") %>%
+  pull(affiliates)
+
+low_parents <- sample_composition %>%
+  filter(parent_uk_exposure_group == "Low UK exposure") %>%
+  pull(parents)
+
+low_affiliates <- sample_composition %>%
+  filter(parent_uk_exposure_group == "Low UK exposure") %>%
+  pull(affiliates)
+
+none_parents <- sample_composition %>%
+  filter(parent_uk_exposure_group == "No UK exposure") %>%
+  pull(parents)
+
+none_affiliates <- sample_composition %>%
+  filter(parent_uk_exposure_group == "No UK exposure") %>%
+  pull(affiliates)
+```
+
+For this heterogeneity exercise, we construct parent-level UK exposure using the
+share of each parent firm's affiliates located in the UK in 2010. Among parent
+firms with any UK presence, the median UK affiliate share is
+`r sprintf("%.3f", median_positive_share)`. We classify affiliates as belonging
+to the high-exposure group if their parent firm's 2010 UK affiliate share is
+weakly above this threshold, and to the low-exposure group otherwise. In the
+baseline exit sample, the high-exposure group contains `r high_parents` parent
+firms and `r high_affiliates` affiliates, while the low-exposure group contains
+`r low_parents` parent firms and `r low_affiliates` affiliates. For comparison,
+the group of parents with no UK exposure contains `r none_parents` parent firms
+and `r none_affiliates` affiliates.
+
+# Distribution of UK exposure
+
+```{r exposure-distribution}
+# 分布図を描くためのパッケージを読み込む
+library(ggplot2)
+
+# 2010 年時点の親会社別 UK exposure を 1 行 1 親会社で取り出す
+parent_exposure_dist <- exit_sample %>%
+  distinct(JPCode, uk_affiliate_share_2010, any_uk_presence_2010)
+
+# 全親会社について UK exposure の分布を描く
+ggplot(parent_exposure_dist, aes(x = uk_affiliate_share_2010)) +
+  # exposure share のヒストグラムを描く
+  geom_histogram(binwidth = 0.01, fill = "#6baed6", color = "white") +
+  # high / low の境目として使う中央値に縦線を引く
+  geom_vline(xintercept = median_positive_share, linetype = "dashed", color = "#cb181d") +
+  # 軸ラベルとタイトルを付ける
+  labs(
+    x = "UK affiliate share in 2010",
+    y = "Number of parent firms",
+    title = "Distribution of parent-level UK exposure in 2010",
+    subtitle = "Dashed line shows the median among firms with positive UK exposure"
+  ) +
+  # 図の見た目を整える
+  theme_minimal(base_size = 12)
+
+# 正の UK exposure を持つ親会社だけに限定した分布を描く
+ggplot(
+  parent_exposure_dist %>% filter(any_uk_presence_2010),
+  aes(x = uk_affiliate_share_2010)
+) +
+  # 正の exposure に限定したヒストグラムを描く
+  geom_histogram(binwidth = 0.005, fill = "#74c476", color = "white") +
+  # high / low の境目として使う中央値に縦線を引く
+  geom_vline(xintercept = median_positive_share, linetype = "dashed", color = "#cb181d") +
+  # 軸ラベルとタイトルを付ける
+  labs(
+    x = "UK affiliate share in 2010",
+    y = "Number of parent firms",
+    title = "Distribution among firms with positive UK exposure",
+    subtitle = "Dashed line shows the median positive UK exposure"
+  ) +
+  # 図の見た目を整える
+  theme_minimal(base_size = 12)
+```
+
+# Event-study estimates by exposure group
+
+```{r event-study}
+# event-study を行う 2 つの exposure group だけを対象にする
+event_groups <- c("Low UK exposure", "High UK exposure")
+
+# event-study 図に載せる親企業数を group ごとに取り出す
+event_parent_counts <- sample_composition %>%
+  filter(parent_uk_exposure_group %in% event_groups) %>%
+  mutate(parent_uk_exposure_group = factor(parent_uk_exposure_group, levels = event_groups)) %>%
+  arrange(parent_uk_exposure_group)
+
+# group ごとのデータを list にまとめる
+event_samples <- split(
+  exit_sample %>% filter(parent_uk_exposure_group %in% event_groups),
+  factor(
+    exit_sample %>% filter(parent_uk_exposure_group %in% event_groups) %>% pull(parent_uk_exposure_group),
+    levels = event_groups
+  )
+)
+
+# fixest を使って group ごとの event-study を推定する
+event_models <- lapply(
+  event_samples,
+  function(df) {
+    feols(
+      exitit ~ i(year, GBR, 2014) | year + AffiliateCode,
+      data = df,
+      vcov = ~country
+    )
+  }
+)
+
+# 係数名から pre-period と post-period の年を取り出す補助関数を作る
+extract_event_years <- function(model) {
+  coef_names <- names(coef(model))
+  as.numeric(sub(".*year::([0-9]{4}):GBR.*", "\\1", coef_names))
+}
+
+# pre-trend と post-treatment の joint test の p-value を返す関数を作る
+joint_test_pvalue <- function(model, years) {
+  coef_names <- names(coef(model))
+  test_terms <- coef_names[extract_event_years(model) %in% years]
+
+  if (length(test_terms) == 0) {
+    return(NA_real_)
+  }
+
+  b <- coef(model)[test_terms]
+  V <- vcov(model)[test_terms, test_terms, drop = FALSE]
+  V_inv_b <- tryCatch(
+    solve(V, b),
+    error = function(e) qr.solve(V, b)
+  )
+  wald_stat <- as.numeric(t(b) %*% V_inv_b)
+  1 - pchisq(wald_stat, df = length(test_terms))
+}
+
+# 図に記載するサンプル情報と joint test の結果を group ごとに整理する
+event_fit_stats <- tibble(
+  parent_uk_exposure_group = factor(names(event_models), levels = event_groups),
+  N = sapply(event_models, nobs),
+  pretrend_p = sapply(event_models, joint_test_pvalue, years = c(2010, 2012)),
+  post_p = sapply(event_models, joint_test_pvalue, years = c(2016, 2018, 2020))
+) %>%
+  left_join(event_parent_counts, by = "parent_uk_exposure_group") %>%
+  arrange(parent_uk_exposure_group)
+
+# fixest の etable で post-treatment の係数表を簡潔に表示する
+etable(
+  event_models,
+  keep = "%year::2010:GBR|year::2012:GBR|year::2016:GBR|year::2018:GBR|year::2020:GBR",
+  fitstat = ~ n + wr2,
+  tex = FALSE
+)
+
+# event-study 図とは別に joint test の結果を表で表示する
+event_test_results <- event_fit_stats %>%
+  transmute(
+    `Exposure group` = as.character(parent_uk_exposure_group),
+    `Pre-trend test p-value` = round(pretrend_p, 3),
+    `Post-treatment joint test p-value` = round(post_p, 3)
+  )
+
+kable(
+  event_test_results,
+  caption = "Joint tests for pre-trends and post-treatment effects by exposure group"
+)
+```
+
+# Event-study plot
+
+```{r event-study-plot}
+# 凡例は exposure group 名だけを表示する
+legend_labels <- as.character(event_fit_stats$parent_uk_exposure_group)
+
+# 図の subtitle に入れる note を exposure group ごとに作る
+subtitle_line_low <- sprintf(
+  "Low UK exposure: N = %s, Parent firms = %s, Affiliates = %s, Observations = %s.",
+  event_fit_stats$N[event_fit_stats$parent_uk_exposure_group == "Low UK exposure"],
+  event_fit_stats$parents[event_fit_stats$parent_uk_exposure_group == "Low UK exposure"],
+  event_fit_stats$affiliates[event_fit_stats$parent_uk_exposure_group == "Low UK exposure"],
+  event_fit_stats$observations[event_fit_stats$parent_uk_exposure_group == "Low UK exposure"]
+)
+
+subtitle_line_high <- sprintf(
+  "High UK exposure: N = %s, Parent firms = %s, Affiliates = %s, Observations = %s.",
+  event_fit_stats$N[event_fit_stats$parent_uk_exposure_group == "High UK exposure"],
+  event_fit_stats$parents[event_fit_stats$parent_uk_exposure_group == "High UK exposure"],
+  event_fit_stats$affiliates[event_fit_stats$parent_uk_exposure_group == "High UK exposure"],
+  event_fit_stats$observations[event_fit_stats$parent_uk_exposure_group == "High UK exposure"]
+)
+
+# 画面表示と EPS 保存の両方で同じ event-study 図を描けるように関数化する
+plot_event_study <- function() {
+  do.call(
+    iplot,
+    c(
+      event_models,
+      list(
+        pt.join = TRUE,
+        sep = 0.5,
+        ref.line = 0,
+        xlab = "Year (two-year intervals)",
+        ylab = "Estimated effect on exit probability",
+        main = "Affiliate-Level Exit Responses by Parent-Level UK Exposure",
+        ci_level = 0.95,
+        col = c("#1b9e77", "#d95f02"),
+        pt.col = c("#1b9e77", "#d95f02")
+      )
+    )
+  )
+
+  # 2 系列の区別が分かるよう凡例を追加する
+  legend(
+    "topright",
+    legend = legend_labels,
+    col = c("#1b9e77", "#d95f02"),
+    pch = 19,
+    lty = 1:2,
+    lwd = 1,
+    bty = "n",
+    title = "Exposure Group"
+  )
+}
+
+# レポート内に図を表示する
+plot_event_study()
+
+# 同じ図を EPS 形式でも保存する
+postscript(
+  "../../04_tex/main/FigF2.eps",
+  horizontal = FALSE,
+  width = 8,
+  height = 6
+)
+plot_event_study()
+dev.off()
+```
+
+```{r event-study-note, results='asis'}
+# 図の注記は HTML 上で本文テキストとして表示し、後で LaTeX に貼りやすくする
+cat(
+  paste0(
+    "**Figure note.** ",
+    subtitle_line_low,
+    "<br>",
+    subtitle_line_high
+  )
+)
+```

@@ -1,0 +1,108 @@
+---
+title: "EU内現地法人数データの作成"
+author: "Ayumu Tanaka"
+date: "2024-05-18"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # Display codes
+                      cache = FALSE, # do not Cache the results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+# 準備
+
+
+```{r preparation}
+# ワークスペースの初期化
+rm(list = ls())
+
+# 必要なパッケージの読み込み
+library("rio")           # For importing data 
+library("tidyverse")     # For data manipulation
+library("countrycode")   # For creating the country ISO codes
+library("Hmisc")         # For labeling the variables
+```
+
+
+
+
+# データの読み込み
+
+
+以下のデータを読み込む。
+
+- "FA3": 日本の海外子会社の基本データ
+
+```{r load-data}
+
+FA4  <- rio::import("../../03_data_output/Affiliate/affiliate_panel_with_parent_links.dta")
+
+```
+
+
+# EU内現地法人数の作成
+
+EUにおける海外子会社数を計算する。
+
+```{r number-affiliates-EU}
+
+# 英国ダミーを作成
+  FA4 <- FA4 %>% 
+    mutate(GBR = ifelse(iso == "GBR", 1, 0))
+
+# 英国の現地法人数を作成
+  FA4 <- FA4 %>%
+    group_by(JPCode, year) %>%
+    mutate(N_Aff_GBR = sum(GBR))
+
+# EU全体の現地法人数を作成
+  FA4 <- FA4 %>%
+    group_by(JPCode, year) %>%
+    mutate(N_Aff_EU = sum(euall))
+
+# EU全体から英国分を差し引く
+  FA4 <- FA4 %>%
+    mutate(N_Aff_EU = N_Aff_EU - N_Aff_GBR)
+```
+
+  
+
+# EU内現地法人数の分布確認
+```{r barplot-existence-affiliates-EU}
+  FA4$N_Aff_EU_dummy <- ifelse(FA4$N_Aff_EU > 0, 1, 0)
+  
+  barplot(table(FA4$N_Aff_EU_dummy), 
+          main = "The existence of affiliates in EU except the UK")
+  FA4$N_Aff_EU_dummy <- NULL
+```
+
+# EU内現地法人数のヒストグラム（N_Aff_EU > 0）
+```{r histogram-affiliates-EU}
+  barplot(table(FA4$N_Aff_EU[FA4$N_Aff_EU > 0]),
+          main = "The number of affiliates in EU except the UK")
+```
+
+# EU内現地法人数の要約統計
+```{r summary-affiliates-EU}
+
+# EU内現地法人数の平均
+  mean(FA4$N_Aff_EU, na.rm = TRUE)
+
+# N_Aff_EU > 0 の場合の平均
+  mean(FA4$N_Aff_EU[FA4$N_Aff_EU > 0], na.rm = TRUE)
+
+```
+
+# データの保存
+```{r save-data}
+# データの保存
+rio::export(FA4, "../../03_data_output/Affiliate/affiliate_panel_with_affiliate_counts.dta")
+```

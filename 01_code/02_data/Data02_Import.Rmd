@@ -1,0 +1,204 @@
+---
+title: "東洋経済データの読み込み"
+author: "Ayumu Tanaka"
+date: "2024-05-18"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: yes
+---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # Display codes
+                      cache = FALSE, # do not Cache the results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+# 準備
+
+
+```{r preparation}
+# ワークスペースの初期化
+rm(list = ls())
+
+# 必要なパッケージの読み込み
+library("rio")           # For importing data 
+library("tidyverse")     # For data manipulation
+library("countrycode")   # For creating the country ISO codes
+library("Hmisc")         # For labeling the variables
+```
+
+
+
+
+# SHJP・JP・FA データの読み込み
+
+- "SHJP": Japanese parent firms' ownership data
+- "JP": Japanese parent firms' financial data
+- "FA": Japanese affiliates' basic data
+
+以下のデータを読み込む。
+
+- "SHJP": 日本の親会社の出資比率データ
+- "JP": 日本の親会社の財務データ
+- "FA": 日本の海外子会社の基本データ
+
+```{r load-data}
+
+  # Japanese parent firms' ownership data
+  SHJP <- rio::import("../../02_data_input/KSKSHJP.dta")
+    # `EditionYear` から 1 を引いて `year` を作成
+    SHJP$year =  SHJP$EditionYear-1
+    # `EditionYear` 列を削除
+    SHJP$EditionYear = NULL
+    # `KSJOwnRatio < 10` を削除
+    SHJP = SHJP[SHJP$KSJOwnRatio >= 10, ]
+    # order by KSKJPCode and year
+    SHJP = SHJP[order(SHJP$KSKJPCode, SHJP$year), ]
+
+  # Japanese parent firms' financial data
+  JP <- rio::import("../../02_data_input/KSKJP.dta")
+    # `EditionYear` から 1 を引いて `year` を作成
+    JP$year =  JP$EditionYear-1
+    # `EditionYear` 列を削除
+    JP$EditionYear = NULL
+    JP = JP[order(JP$KSKJPCode, JP$year), ]
+
+
+  # Japanese affiliates' basic data
+  FA <- rio::import("../../02_data_input/KSKFA.dta")
+    # `EditionYear` から 1 を引いて `year` を作成
+    FA$year =  FA$EditionYear-1
+    # `EditionYear` 列を削除
+    FA$EditionYear = NULL
+    # Order by KSFAffiliateCode and year
+    FA = FA[order(FA$KSFAffiliateCode, FA$year), ]
+    FA = FA[FA$KSFParentJPOwnRatio >= 10, ]
+
+```
+
+
+# 隔年サンプルへの限定
+
+分析期間全体を隔年（偶数年）に統一する。
+処置前（〜2014年）・処置後（2016年〜）とも同一頻度のパネルとなる。
+
+```{r filter-biennial}
+even_years <- seq(1990, 2022, by = 2)
+
+SHJP <- SHJP[SHJP$year %in% even_years, ]
+JP   <- JP[JP$year   %in% even_years, ]
+FA   <- FA[FA$year   %in% even_years, ]
+```
+
+
+# 変数名の確認
+
+## SHJP
+
+```{r check-variable-names1}
+names(SHJP)
+```
+
+## JP
+
+```{r check-variable-names2}
+names(JP)
+```
+
+## FA
+
+```{r check-variable-names3}
+names(FA)
+```
+
+
+# FAデータの整形
+
+必要な変数を残し、変数名を変更しておく。
+
+```{r}
+# 不要な列を削除
+FA <- FA %>% 
+   select(-c(KSFDistCode1990, KSFDistCode1995,KSFAffiliateNameAlph,KSFAddressAlph,
+             KSFAddress, KSFPhoneNumber, KSFDescription, KSFRepresentative,
+             KSFCapitalStockNumeric, KSFCapitalStockDigitString,
+             KSFCapitalStockCurrencySymbol, KSFDispatchedNumber, KSFStartDateType,
+             KSFFiscalPeriodDate, KSFRevenueNumeric, 
+             KSFRevenueDigitString, KSFRevenueCurrencySymbol, KSFRevenueUSD
+             ))
+ 
+
+
+# 列名から `KSF` を削除
+   names(FA) <- gsub("KSF", "", names(FA))
+   
+# `Sector` で始まる列名に `Parent_` を付ける
+  names(FA) <- gsub("^Sector", "FA_Sector", names(FA))
+```
+
+
+# SHJPデータの整形
+
+必要な変数を残し、変数名を変更しておく。
+
+
+```{r}
+# 列名から `KSF` を削除
+      names(SHJP) <- gsub("KSK", "", names(SHJP))
+      names(SHJP) <- gsub("KSF", "", names(SHJP))
+      names(SHJP) <- gsub("KS", "", names(SHJP))
+```
+
+
+```{r filter-largest-owner-SHJP}
+# `AffiliateCode`・`year`・`JOwnRatio` で並べ替え
+SHJP <- SHJP %>%
+  arrange(AffiliateCode, year, desc(JOwnRatio))
+
+# `AffiliateCode` 年ごとの `JOwnRatio` 順位を作成
+SHJP <- SHJP %>%
+  group_by(AffiliateCode, year) %>%
+  mutate(rank = rank(-JOwnRatio, ties.method = "min", na.last = "keep")) %>%
+  ungroup()
+```
+
+
+# JPデータの整形
+
+必要な変数を残し、変数名を変更しておく。
+
+```{r}
+
+# JPの列名から `KSK` を削除
+  names(JP) <- gsub("KSK", "", names(JP))
+  
+# `Common` で始まる列名に `Parent_` を付ける
+  names(JP) <- gsub("^Common", "Parent_", names(JP))
+
+# `Sector` で始まる列名に `Parent_` を付ける
+  names(JP) <- gsub("^Sector", "Parent_Sector", names(JP))
+
+  
+  # Select the necessary columns from JP
+JP <- JP %>% 
+  select(JPCode, year, Parent_Name, Parent_NameAlphabet, 
+         Parent_SectorCode1990, Parent_SectorCode2000, Parent_SectorCode2009
+         )
+
+```
+
+
+
+# データの保存
+
+```{r export-data}
+# データの保存
+  rio::export(SHJP, "../../03_data_output/ShareHolder/shareholder_panel_raw.dta")
+  rio::export(FA, "../../03_data_output/Affiliate/affiliate_panel_raw.dta")
+  rio::export(JP, "../../03_data_output/Parent/parent_panel_raw.dta")
+
+```

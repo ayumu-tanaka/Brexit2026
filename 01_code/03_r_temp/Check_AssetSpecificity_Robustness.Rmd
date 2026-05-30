@@ -1,0 +1,267 @@
+---
+title: "Robustness Check for Asset Specificity Heterogeneity"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+# Hide package startup messages and warnings in the rendered report.
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+# Purpose
+
+This temporary note checks whether the heterogeneity result by asset specificity
+is robust across different comparison groups and estimators.
+
+The main outcome is the affiliate-level exit indicator. We compare:
+
+- High-income EU sample
+- EU sample
+- Non-EU OECD sample
+- Full sample
+
+Within each sample, we split observations into:
+
+- Low asset specificity sectors
+- High asset specificity sectors
+
+# Packages
+
+```{r packages}
+library(rio)
+library(dplyr)
+library(purrr)
+library(stringr)
+library(tibble)
+library(fixest)
+library(etwfe)
+library(knitr)
+```
+
+# Input data
+
+```{r inputs}
+# Asset-specificity classification by industry.
+ppe <- import("../../02_data_input/PPE.dta") %>%
+  distinct(OJCIndustryCode, .keep_all = TRUE) %>%
+  select(OJCIndustryCode, RecoveryRateHigh)
+
+# Estimation samples used in the main paper.
+sample_paths <- c(
+  "High-income EU" = "../../03_data_output/affiliate_panel_brexit_high_income_eu_sample.dta",
+  "EU" = "../../03_data_output/affiliate_panel_brexit_eu_sample.dta",
+  "Non-EU OECD" = "../../03_data_output/affiliate_panel_brexit_non_eu_oecd_sample.dta",
+  "Full sample" = "../../03_data_output/affiliate_panel_brexit_full_sample.dta"
+)
+```
+
+# Helper functions
+
+```{r helpers}
+prepare_sample <- function(path) {
+  import(path) %>%
+    left_join(ppe, by = c("FASector" = "OJCIndustryCode")) %>%
+    filter(year >= 2010, year <= 2020, !is.na(RecoveryRateHigh))
+}
+
+estimate_twfe_exit <- function(df) {
+  feols(
+    exitit ~ i(year, GBR, 2014) | year + AffiliateCode,
+    data = df,
+    vcov = ~country
+  )
+}
+
+estimate_pooled_logit_exit <- function(df) {
+  etwfe(
+    exitit ~ 1,
+    tvar = year,
+    gvar = first_year,
+    ivar = year + AffiliateCode,
+    data = df,
+    family = "logit",
+    vcov = ~country
+  )
+}
+
+extract_event_summary <- function(model, estimator_name) {
+  ct <- as.data.frame(coeftable(model))
+  ct$term <- rownames(ct)
+  rownames(ct) <- NULL
+
+  if (estimator_name == "TWFE OLS") {
+    event_rows <- ct %>%
+      filter(str_detect(term, "^year::[0-9]{4}:GBR$")) %>%
+      mutate(
+        event_year = as.integer(str_match(term, "^year::([0-9]{4}):GBR$")[, 2]),
+        estimator = estimator_name
+      ) %>%
+      select(estimator, event_year, estimate = Estimate, std_error = `Std. Error`, statistic = `t value`, p_value = `Pr(>|t|)`)
+  } else {
+    event_rows <- ct %>%
+      filter(str_detect(term, "^\\.Dtreat:first_year::2016:year::20(16|17|18|19|20)$")) %>%
+      mutate(
+        event_year = as.integer(str_match(term, "year::([0-9]{4})$")[, 2]),
+        estimator = estimator_name
+      ) %>%
+      select(estimator, event_year, estimate = Estimate, std_error = `Std. Error`, statistic = `z value`, p_value = `Pr(>|z|)`)
+  }
+
+  event_rows
+}
+
+safe_wald_p <- function(model, terms) {
+  available <- names(coef(model))
+  keep_terms <- terms[terms %in% available]
+
+  if (length(keep_terms) == 0) {
+    return(NA_real_)
+  }
+
+  restriction <- paste0(keep_terms, " = 0", collapse = " & ")
+
+  out <- tryCatch(
+    fixest::wald(model, restriction),
+    error = function(e) NULL
+  )
+
+  if (is.null(out)) {
+    return(NA_real_)
+  }
+
+  p_value <- suppressWarnings(as.numeric(out["p"]))
+
+  if (length(p_value) == 0 || is.na(p_value)) {
+    return(NA_real_)
+  }
+
+  p_value
+}
+
+summarize_model <- function(model, estimator_name, sample_name, specificity_name) {
+  event_rows <- extract_event_summary(model, estimator_name)
+
+  lookup_p <- function(target_year) {
+    value <- event_rows %>%
+      filter(event_year == target_year) %>%
+      pull(p_value)
+
+    if (length(value) == 0) {
+      return(NA_real_)
+    }
+
+    value[[1]]
+  }
+
+  lookup_coef <- function(target_year) {
+    value <- event_rows %>%
+      filter(event_year == target_year) %>%
+      pull(estimate)
+
+    if (length(value) == 0) {
+      return(NA_real_)
+    }
+
+    value[[1]]
+  }
+
+  tibble(
+    sample = sample_name,
+    specificity = specificity_name,
+    estimator = estimator_name,
+    nobs = nobs(model),
+    coef_2010 = lookup_coef(2010),
+    p_2010 = lookup_p(2010),
+    coef_2012 = lookup_coef(2012),
+    p_2012 = lookup_p(2012),
+    pretrend_p = if (estimator_name == "TWFE OLS") safe_wald_p(model, c("year::2010:GBR", "year::2012:GBR")) else NA_real_,
+    post_p = if (estimator_name == "TWFE OLS") safe_wald_p(model, c("year::2016:GBR", "year::2017:GBR", "year::2018:GBR", "year::2019:GBR", "year::2020:GBR")) else NA_real_,
+    coef_2016 = lookup_coef(2016),
+    p_2016 = lookup_p(2016),
+    coef_2019 = lookup_coef(2019),
+    p_2019 = lookup_p(2019),
+    coef_2020 = lookup_coef(2020),
+    p_2020 = lookup_p(2020)
+  )
+}
+
+run_one_split <- function(df, sample_name, specificity_value, specificity_name) {
+  split_df <- df %>% filter(RecoveryRateHigh == specificity_value)
+
+  results <- list()
+
+  twfe_model <- tryCatch(
+    estimate_twfe_exit(split_df),
+    error = function(e) NULL
+  )
+
+  if (!is.null(twfe_model)) {
+    results$twfe <- summarize_model(
+      model = twfe_model,
+      estimator_name = "TWFE OLS",
+      sample_name = sample_name,
+      specificity_name = specificity_name
+    )
+  }
+
+  logit_model <- tryCatch(
+    estimate_pooled_logit_exit(split_df),
+    error = function(e) NULL
+  )
+
+  if (!is.null(logit_model)) {
+    results$logit <- summarize_model(
+      model = logit_model,
+      estimator_name = "Pooled logit QMLE DiD",
+      sample_name = sample_name,
+      specificity_name = specificity_name
+    )
+  }
+
+  bind_rows(results)
+}
+```
+
+# Run robustness checks
+
+```{r run-estimation}
+robustness_results <- imap_dfr(sample_paths, function(path, sample_name) {
+  sample_df <- prepare_sample(path)
+
+  bind_rows(
+    run_one_split(sample_df, sample_name, 0, "Low specificity"),
+    run_one_split(sample_df, sample_name, 1, "High specificity")
+  )
+})
+
+robustness_results
+```
+
+# Summary table
+
+```{r summary-table}
+robustness_results %>%
+  mutate(across(where(is.numeric), ~round(.x, 4))) %>%
+  kable()
+```
+
+# Interpretation guide
+
+The heterogeneity result looks stronger if:
+
+- post-treatment coefficients are more negative or positive for one specificity group
+- post-treatment joint p-values remain small across different comparison groups
+- pre-trend p-values are not systematically small
+
+The result looks fragile if:
+
+- significance appears only in one comparison group
+- pre-trend violations are also strong in the same specification
+- the sign changes across samples or estimators

@@ -1,0 +1,336 @@
+---
+title: "Brexit分析用の現地法人パネル作成"
+author: "Ayumu Tanaka"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+  pdf_document:
+    toc: true
+    keep_tex: true
+#    fig_caption: yes
+---
+
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, # show R code
+                      cache = FALSE, # do not cache results
+                      message=FALSE, # パッケージ読込時などのメッセージを表示しない
+                      warning=FALSE) # 警告メッセージを表示しない
+
+```
+
+
+# データの準備
+
+High-income EU countries are Luxembourg, Ireland, Denmark, Netherlands, Sweden, Austria, Germany, Finland, Belgium, France, United Kingdom, and Italy. The GDP per capita of these countries are as follows:
+
+- Luxembourg: $115,531 LUX
+- Ireland: $84,339 IRL
+- Denmark: $63,434 DNK
+- Netherlands: $62,515 NLD
+- Sweden: $59,738 SWE
+- Austria: $57,256 AUT
+- Germany: $55,682 DEU
+- Finland: $55,345 FIN
+- Belgium: $54,319 BEL 
+- France: $46,133 FRA
+- United Kingdom: $45,470 GBR
+- Italy: $40,594 ITA
+
+## データの読み込み
+```{r load-the-data}
+library(tidyverse)
+library(rio)
+aff = import("../../03_data_output/Affiliate/affiliate_panel_survival_ready.dta")
+```
+
+
+```{r}
+# `iso` を `country` に変更
+names(aff)[names(aff)=="iso"] = "country"
+
+# 高所得EUダミーを作成
+aff$highEU <- ifelse(aff$country %in% 
+                       c("AUT", "BEL", "DNK", "FIN", "FRA", 
+                         "DEU", "IRL", "ITA", "LUX", 
+                         "NLD", "SWE", "GBR"), 1, 0)
+
+# 年×現地法人ごとの親会社数を作成
+aff <- aff %>%
+  group_by(AffiliateCode, year) %>%
+  mutate(N_Parent = n())
+
+# `FA_Sector` を `FASector` に変更
+names(aff)[names(aff)=="FA_SectorCode2009"] = "FASector"
+
+# 現地法人従業員数を作成
+aff$Aff_size_raw <- aff$Aff_size
+
+# Replacing Aff_size with country-year average if missing
+aff <- aff %>%
+  group_by(country, year) %>%
+  mutate(Aff_size = ifelse(is.na(Aff_size), mean(Aff_size, na.rm = TRUE), Aff_size))
+
+# Replacing N_Aff_EU with N_Aff_EU + 1
+aff$N_Aff_EU <- aff$N_Aff_EU + aff$N_Aff_GBR
+
+```
+
+
+## Reducing the affiliates observations to those owned by the parent firm with the largest ownership ratio
+
+```{r}
+
+## 1. Identify the parent that has the largest ownership ratio "Ratio" by year and AffiliateCode
+aff <- aff %>%
+  group_by(AffiliateCode, year) %>%
+  filter(Ratio == max(Ratio))
+
+## 2. If there are multiple parent firms with the same ownership ratio, then select the first one
+aff <- aff %>%
+  group_by(AffiliateCode, year) %>%
+  filter(row_number() == 1)
+
+## 3. Sort the data by AffiliateCode and year
+aff <- aff %>%
+  arrange(AffiliateCode, year)
+```
+
+
+
+## Exit_{it} variable
+
+```{r}
+# Sort the data by Affiliatecode and year
+aff <- aff %>%
+  arrange(AffiliateCode, year)
+
+# 各現地法人の最終年を `exit_year` として作成
+aff <- aff %>%
+  group_by(AffiliateCode) %>%
+  mutate(exit_year = max(year) + 1)
+
+```
+
+
+## 2010年以降のサンプル作成
+
+2010〜2020年の海外子会社のパネルデータで、2010年に存在していた海外子会社に限定。
+
+```{r}
+aff <- aff %>%
+  filter(year >= 2010)
+aff <- aff %>% 
+  group_by(AffiliateCode) %>% 
+  mutate(min_year=min(year))
+
+aff <- aff %>% 
+  filter(min_year == 2010)
+aff$min_year <- NULL
+
+# Remove unnecessary variables: 
+aff$N_Parent <- NULL
+aff$Political_Stability <- NULL
+aff$Government_Effectiveness <- NULL
+aff$Regulatory_Quality <- NULL
+aff$Rule_of_Law <- NULL
+aff$Control_of_Corruption <- NULL
+#aff$survival_years <- NULL
+aff$DistCode1990 <- NULL
+aff$DistCode1995 <- NULL
+aff$DistCode2000 <- NULL
+aff$Ease_business <- NULL
+aff$AbroadOwnRatio <- NULL
+aff$AbroadOwnRatio <- NULL
+#aff$ParentJPNumber <- NULL
+#aff$DispatchedNumber <- NULL
+aff$StartDateType <- NULL
+aff$StartDate <- NULL
+
+```
+
+
+## バランスドパネル化
+
+2010年に存在していた海外子会社の2010〜2020年のバランスドパネルデータを作成
+
+```{r affiliate-balanced}
+library(plm)
+aff <- data.frame(aff) # make into data frame
+aff <- plm::make.pbalanced(aff, balance.type = c("fill"), index = c("AffiliateCode", "year"))
+
+```
+
+
+## FDI目的変数の付与
+
+```{r affiliate-purpose}
+# import the POI data
+POI <- import("../../02_data_input/POI_wide.dta")
+
+# Combine the affiliate data with the POI data. key: AffiliateCode & year
+
+aff <- aff %>%
+  left_join(POI, by = c("AffiliateCode", "year"))
+
+# If the EPFDI is missing, then set it to the other year's EPFDI
+aff <- aff %>%
+  group_by(AffiliateCode) %>%
+  mutate(EPFDI = ifelse(is.na(EPFDI), 
+                        first(na.omit(EPFDI)), 
+                        EPFDI)) %>%
+  ungroup()
+
+# If the EPFDI is still missing, then set it to 0.
+aff <- aff %>%
+  mutate(EPFDI = ifelse(is.na(EPFDI), 0, EPFDI))
+
+# If the HFDI is missing, then set it to the other year's HFDI
+aff <- aff %>%
+  group_by(AffiliateCode) %>%
+  mutate(HFDI = ifelse(is.na(HFDI), 
+                       first(na.omit(HFDI)), 
+                       HFDI)) %>%
+  ungroup()
+
+# If the HFDI is still missing, then set it to 0.
+aff <- aff %>%
+  mutate(HFDI = ifelse(is.na(HFDI), 0, HFDI))
+
+```
+
+
+
+
+## 共変量の初期値作成
+
+```{r affiliate-initial-values}
+# Sort by AffiliateCode and year
+aff <- aff %>% 
+  arrange(AffiliateCode, year)
+
+# Replacing Parent_SectorClass, FASector, GDP_per_capita with those of 2010
+aff <- aff %>% 
+  group_by(AffiliateCode) %>% 
+  mutate(Parent_SectorClass = first(Parent_SectorClass),
+         FASector = first(FASector),
+         FA_SectorClass = first(FA_SectorClass),
+         country = first(country),
+         EU_all = first(EU_all),
+         highEU = first(highEU),
+         Aff_size = first(Aff_size),
+         Aff_size_raw = first(Aff_size_raw),
+         GDP_per_capita = first(GDP_per_capita),
+         GDP_PPP = first(GDP_PPP),
+         N_Aff_EU = first(N_Aff_EU),
+         exit_year = first(exit_year),
+         JPCode = first(JPCode),
+         ParentJPNumber = first(ParentJPNumber),
+         survival_years = first(survival_years),
+         EPFDI = first(EPFDI),
+         HFDI = first(HFDI),
+         GBR = first(GBR),
+         Parent_SectorClassNameAlph = first(Parent_SectorClassNameAlph),
+         FA_SectorClassNameAlph = first(FA_SectorClassNameAlph)
+         )
+
+# keep the above variables + Ratio
+aff <- aff %>% 
+  select(Ratio, AffiliateCode, year, 
+         Parent_SectorClass, FASector, FA_SectorClass, country, 
+         EU_all, highEU, Aff_size, Aff_size_raw,
+         GDP_per_capita, GDP_PPP, N_Aff_EU, 
+         exit_year, JPCode, GBR, EPFDI, HFDI,
+         ParentJPNumber, survival_years,
+         Parent_SectorClassNameAlph, FA_SectorClassNameAlph)
+
+```
+
+
+## Brexitダミーの作成
+```{r aff-brexit}
+# Brexitダミーを作成
+aff <- aff %>%
+  mutate(Brexit = ifelse(year >= 2016 & country =="GBR", 1, 0))
+
+aff$first_year <- 10000
+aff$first_year[aff$country=="GBR"] <- 2016
+```
+
+## 退出ダミーの作成
+
+```{r aff-exitit}
+# `exitit` を 0 で初期化
+## if year < exit_year, exitit = 0, otherwise exitit = 1
+aff <- aff %>%
+  mutate(exitit = ifelse(year >= exit_year, 1, 0))
+
+# If exitit == 1, replace Ratio with 0
+aff <- aff %>%
+  mutate(Ratio = ifelse(exitit == 1, 0, Ratio))
+
+# Move the exit_year & exitit after the AffiliateCode, year
+aff <- aff %>%
+  select(AffiliateCode, year, exit_year, exitit, everything())
+
+aff$exit_year <- NULL
+
+```
+
+
+
+## 欧州・高所得EUサブサンプルの作成
+
+```{r aff-subsample}
+# 高所得EUサンプルを作成
+aff_highEU <- aff %>%
+  filter(highEU == 1)
+
+# 欧州サンプルを作成
+aff_eu <- aff %>%
+  filter(EU_all == 1)
+
+```
+
+
+
+## OECD対照群サンプルの作成
+```{r}
+# Select OECD countries
+aff_oecd <- aff %>%
+  filter(country %in% c("AUS", "AUT", "BEL", 
+                        "CAN", "CHL", "COL", "CZE", 
+                        "DNK", "EST", "FIN", "FRA", 
+                        "DEU", "GRC", "HUN", 
+                        "ISL", "IRL", "ISR", "ITA", 
+                        "KOR", "LVA", "LTU", "LUX", 
+                        "MEX", "NLD", "NZL", "NOR", 
+                        "POL", "PRT", "SVK", "SVN", 
+                        "ESP", "SWE", "CHE", "TUR", 
+                        "GBR", "USA"))
+# Remove EU countries from the OECD countries
+aff_oecd <- aff_oecd %>%
+  filter(EU_all == 0 | GBR==1)
+
+# List the country in the aff_oecd
+unique(aff_oecd$country)
+
+```
+
+
+
+## データの保存
+```{r save-data}
+
+rio::export(aff, "../../03_data_output/Affiliate/affiliate_panel_brexit_full_sample.dta")
+
+rio::export(aff_highEU, "../../03_data_output/Affiliate/affiliate_panel_brexit_high_income_eu_sample.dta")
+rio::export(aff_eu, "../../03_data_output/Affiliate/affiliate_panel_brexit_eu_sample.dta")
+
+rio::export(aff_oecd, "../../03_data_output/Affiliate/affiliate_panel_brexit_non_eu_oecd_sample.dta")
+
+
+```
