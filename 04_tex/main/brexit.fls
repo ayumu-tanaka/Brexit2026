@@ -1,6 +1,6 @@
-PWD /Users/ayumu/Documents/GitHub/2024Brexit/04_tex/main
+PWD /Users/ayumu/Documents/GitHub/Brexit2026/04_tex/main
 INPUT /usr/local/texlive/2025/texmf-var/web2c/luahbtex/lualatex.fmt
-INPUT /Users/ayumu/Documents/GitHub/2024Brexit/04_tex/main/brexit.tex
+INPUT /Users/ayumu/Documents/GitHub/Brexit2026/04_tex/main/brexit.tex
 OUTPUT brexit.log
 INPUT /usr/local/texlive/2025/texmf-dist/tex/latex/tex-ini-files/lualatexquotejobname.lua
 INPUT /usr/local/texlive/2025/texmf-dist/tex/latex/base/ltluatex.lua

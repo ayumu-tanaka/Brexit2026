@@ -1,8 +1,8 @@
-This is LuaHBTeX, Version 1.21.0 (TeX Live 2025)  (format=lualatex 2025.3.11)  29 MAY 2026 13:50
+This is LuaHBTeX, Version 1.21.0 (TeX Live 2025)  (format=lualatex 2025.3.11)  16 JUL 2026 20:49
  restricted system commands enabled.
  file:line:error style messages enabled.
-**/Users/ayumu/Documents/GitHub/2024Brexit/04_tex/main/brexit.tex
-(/Users/ayumu/Documents/GitHub/2024Brexit/04_tex/main/brexit.tex
+**/Users/ayumu/Documents/GitHub/Brexit2026/04_tex/main/brexit.tex
+(/Users/ayumu/Documents/GitHub/Brexit2026/04_tex/main/brexit.tex
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
 Lua module: luaotfload 2024-12-03 v3.29 Lua based OpenType font support
@@ -884,10 +884,10 @@ warning  (pdf backend): ignoring duplicate destination with the name 'page.1'
 
 [7]
 Package epstopdf Info: Source file: <Fig2.eps>
-(epstopdf)                    date: 2026-05-10 00:17:21
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 8139 bytes
 (epstopdf)             Output file: <Fig2-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-05-10 00:18:16
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 12338 bytes
 (epstopdf)             Command: <repstopdf --outfile=Fig2-eps-converted-to.pdf Fig2.eps>
 (epstopdf)             \includegraphics on input line 378.
@@ -898,10 +898,10 @@ File: Fig2-eps-converted-to.pdf Graphic file (type pdf)
 Package luatex.def Info: Fig2-eps-converted-to.pdf  used on input line 378.
 (luatex.def)             Requested size: 303.53633pt x 216.81168pt.
 Package epstopdf Info: Source file: <Fig3a.eps>
-(epstopdf)                    date: 2026-05-28 21:33:33
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 7787 bytes
 (epstopdf)             Output file: <Fig3a-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-05-28 21:33:54
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 13214 bytes
 (epstopdf)             Command: <repstopdf --outfile=Fig3a-eps-converted-to.pdf Fig3a.eps>
 (epstopdf)             \includegraphics on input line 403.
@@ -917,10 +917,10 @@ Overfull \hbox (9.9863pt too wide) in paragraph at lines 403--404
  []
 
 Package epstopdf Info: Source file: <Fig3b.eps>
-(epstopdf)                    date: 2026-05-28 21:33:33
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 7803 bytes
 (epstopdf)             Output file: <Fig3b-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-05-28 21:33:54
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 12864 bytes
 (epstopdf)             Command: <repstopdf --outfile=Fig3b-eps-converted-to.pdf Fig3b.eps>
 (epstopdf)             \includegraphics on input line 408.
@@ -957,10 +957,10 @@ File: ufplmbb.fd 2003/10/30 Fontinst v1.914 font definitions for U/fplmbb.
 
 [15]
 Package epstopdf Info: Source file: <Fig4.eps>
-(epstopdf)                    date: 2026-05-28 15:39:32
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 6737 bytes
 (epstopdf)             Output file: <Fig4-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-05-28 15:46:24
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 15729 bytes
 (epstopdf)             Command: <repstopdf --outfile=Fig4-eps-converted-to.pdf Fig4.eps>
 (epstopdf)             \includegraphics on input line 698.
@@ -976,10 +976,10 @@ Package luatex.def Info: Fig4-eps-converted-to.pdf  used on input line 698.
 
 [17<./Fig4-eps-converted-to.pdf>]
 Package epstopdf Info: Source file: <Fig5.eps>
-(epstopdf)                    date: 2026-05-28 15:45:43
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 43187 bytes
 (epstopdf)             Output file: <Fig5-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-05-28 15:46:25
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 16323 bytes
 (epstopdf)             Command: <repstopdf --outfile=Fig5-eps-converted-to.pdf Fig5.eps>
 (epstopdf)             \includegraphics on input line 786.
@@ -990,10 +990,10 @@ File: Fig5-eps-converted-to.pdf Graphic file (type pdf)
 Package luatex.def Info: Fig5-eps-converted-to.pdf  used on input line 786.
 (luatex.def)             Requested size: 386.95894pt x 232.17297pt.
 Package epstopdf Info: Source file: <Fig6.eps>
-(epstopdf)                    date: 2026-05-28 16:13:41
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 6696 bytes
 (epstopdf)             Output file: <Fig6-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-05-28 16:14:28
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 12691 bytes
 (epstopdf)             Command: <repstopdf --outfile=Fig6-eps-converted-to.pdf Fig6.eps>
 (epstopdf)             \includegraphics on input line 820.
@@ -1019,10 +1019,10 @@ Package luatex.def Info: Fig7.pdf  used on input line 863.
 
 [21<./Fig7.pdf>]
 Package epstopdf Info: Source file: <Fig8.eps>
-(epstopdf)                    date: 2026-05-28 16:16:53
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 8826 bytes
 (epstopdf)             Output file: <Fig8-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-05-28 16:17:05
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 16220 bytes
 (epstopdf)             Command: <repstopdf --outfile=Fig8-eps-converted-to.pdf Fig8.eps>
 (epstopdf)             \includegraphics on input line 917.
@@ -1110,10 +1110,10 @@ Package luatex.def Info: FigC1.pdf  used on input line 1114.
 
 [35]
 Package epstopdf Info: Source file: <FigF2.eps>
-(epstopdf)                    date: 2026-05-28 21:24:07
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 8564 bytes
 (epstopdf)             Output file: <FigF2-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-05-28 21:31:20
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 15487 bytes
 (epstopdf)             Command: <repstopdf --outfile=FigF2-eps-converted-to.pdf FigF2.eps>
 (epstopdf)             \includegraphics on input line 1198.
@@ -1129,10 +1129,10 @@ Package luatex.def Info: FigF2-eps-converted-to.pdf  used on input line 1198.
 
 <./FigF2-eps-converted-to.pdf>]
 Package epstopdf Info: Source file: <FigG3.eps>
-(epstopdf)                    date: 2026-05-28 21:25:47
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 8589 bytes
 (epstopdf)             Output file: <FigG3-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-05-28 21:31:20
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 15763 bytes
 (epstopdf)             Command: <repstopdf --outfile=FigG3-eps-converted-to.pdf FigG3.eps>
 (epstopdf)             \includegraphics on input line 1230.
@@ -1148,10 +1148,10 @@ Package luatex.def Info: FigG3-eps-converted-to.pdf  used on input line 1230.
 
 <./FigG3-eps-converted-to.pdf>]
 Package epstopdf Info: Source file: <FigH4.eps>
-(epstopdf)                    date: 2026-05-28 21:30:20
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 10506 bytes
 (epstopdf)             Output file: <FigH4-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-05-28 21:31:21
+(epstopdf)                    date: 2026-05-29 04:57:46
 (epstopdf)                    size: 16685 bytes
 (epstopdf)             Command: <repstopdf --outfile=FigH4-eps-converted-to.pdf FigH4.eps>
 (epstopdf)             \includegraphics on input line 1264.
